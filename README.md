@@ -187,8 +187,6 @@ The following are current import and export variables used for data atmosphere
 Surface boundary layer and connection to Land
 --------------------------------------------------------
 
-TODO: brief overview of call order:
-
 ```fortran
       call sfc_boundary_layer(real(sec), lm4_model)
       call update_atmos_model_down(lm4_model)              ! for gust calculation with data atmosphere
