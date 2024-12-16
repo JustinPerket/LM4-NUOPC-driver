@@ -154,7 +154,7 @@ For both, the LM4 restart files listed above are used for comparisons
 These tests use the following unique files:
 
     export UFS_CONFIGURE="ufs.configure.atm_lm4.IN"
-    export FV3_RUN="lm4_run.IN"
+    export FV3_RUN="lm4_common.IN lm4_datm_cdeps_gswp.IN"
     export DIAG_TABLE="diag_table_datm_lm4"
     export FIELD_TABLE_ADDITIONAL=field_table_lm4
     export INPUT_NML="input_datm_lm4.nml.IN"
