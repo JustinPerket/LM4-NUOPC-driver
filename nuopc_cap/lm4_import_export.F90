@@ -667,6 +667,22 @@ contains
       call state_setexport_2d(exportState, 'Sl_lfrin', lnd%sg_landfrac,rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+      ! JP TMP fill export fields used by noah
+      if (send_to_atm) then     
+         call state_setexport_2d(exportState, 'Fall_lat',  0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_sen',  0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_evap', 0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_tref',   300*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_qref',   0.0003*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_q',      0.0003*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_gflx', 0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_roff', 0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_soff', 0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_cmm',    0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_chh',    0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_zvfun',  0.0*lnd%sg_landfrac,rc=rc)
+      end if
+      ! JP END
 
    end subroutine export_fields
 
