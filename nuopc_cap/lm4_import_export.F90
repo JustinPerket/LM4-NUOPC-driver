@@ -468,6 +468,8 @@ contains
       character(len=*), parameter :: subname=trim(modName)//':(import_fields)'
       logical           :: first_call = .true.  ! JP TMP DEBUG
 
+      logical           :: first_call = .true.  ! JP TMP DEBUG
+
       ! ----------------------------------------------
 
       rc = ESMF_SUCCESS
@@ -764,6 +766,13 @@ contains
 
          ! pass structured grid data to unstructured grid
          if (present(lm4data_1d)) then
+            ! ! JP tmp debug
+            ! write(*,*) 'JPsgi fldname ', trim(fldname)
+            ! write(*,*) 'JPsgi fldptr2d size ', size(fldptr2d)
+            ! write(*,*) 'JPsgi fldptr2d shape ', shape(fldptr2d)
+            ! write(*,*) 'JPsgi lnd%ls, lnd%le ', lnd%ls, lnd%le
+            ! write(*,*) 'JPsgi lnd%gs, lnd%ge ', lnd%gs, lnd%ge
+            ! ! end JP tmp debug
             call mpp_pass_sg_to_ug(lnd%ug_domain, fldptr2d, lm4data_1d)
          end if
 

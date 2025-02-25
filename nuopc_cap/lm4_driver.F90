@@ -147,8 +147,8 @@ contains
       integer           :: blocksize   = -1
       integer           :: dt_lnd_slow = 86400  ! time step for slow land processes (s)
       integer, dimension(6) :: restart_interval = (/ 0, 0, 0, 0, 0, 0/) !< The time interval that write out intermediate restart file.
-                                                                        !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
-                                                                        !! is all zero, no intermediate restart file will be written out
+      !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
+      !! is all zero, no intermediate restart file will be written out
 
       ! TODO: are all these still needed?
 
@@ -182,13 +182,13 @@ contains
          do while (ierr /= 0)
             read(unit, nml=atmos_prescr_nml, iostat=io)
             ierr = check_nml_error(io,'atmos_prescr_nml')
-         enddo        
-         
+         enddo
+
          ierr=1
          do while (ierr /= 0)
             read(unit, nml=flux_exchange_nml, iostat=io)
             ierr = check_nml_error(io,'flux_exchange_nml')
-         enddo             
+         enddo
          call close_file(unit)
 #endif
       endif
@@ -241,8 +241,8 @@ contains
          ex_b_star(lnd%ls:lnd%le),    &
          ex_u_star(lnd%ls:lnd%le),    &
          ex_wind(lnd%ls:lnd%le),      &
-         ex_z_atm(lnd%ls:lnd%le)      &            
-      )
+         ex_z_atm(lnd%ls:lnd%le)      &
+         )
 
       ! these originally had a tracer dimension
       allocate( &
@@ -252,31 +252,31 @@ contains
          ex_dfdtr_surf(lnd%ls:lnd%le,ntcana), & !< d(tracer flux)/d(surf tracer)
          ex_dfdtr_atm(lnd%ls:lnd%le,ntcana),  & !< d(tracer flux)/d(atm tracer)
          ex_e_tr_n(lnd%ls:lnd%le,ntcana),     & !< coefficient in implicit scheme
-         ex_f_tr_delt_n(lnd%ls:lnd%le,ntcana) &  !< coefficient in implicit scheme      
+         ex_f_tr_delt_n(lnd%ls:lnd%le,ntcana) &  !< coefficient in implicit scheme
 
-      )
+         )
 
-      ! Set restart time  
+      ! Set restart time
       if (ALL(lm4_model%nml%restart_interval ==0)) then
          lm4_model%Time_restart = increment_date(lm4_model%Time_end, 0, 0, 10, 0, 0, 0)   ! no intermediate restart
       else
-         
+
          lm4_model%Time_restart = increment_date(lm4_model%Time_init, lm4_model%nml%restart_interval(1), lm4_model%nml%restart_interval(2), &
             lm4_model%nml%restart_interval(3), lm4_model%nml%restart_interval(4), lm4_model%nml%restart_interval(5), lm4_model%nml%restart_interval(6) )
 
-            ! subtract the slow time step in seconds
-            timestamp = date_to_string(lm4_model%Time_restart)
-            call ESMF_LogWrite('LM4 init_driver: Time_restart before decrement' //trim(timestamp), ESMF_LOGMSG_INFO)
-            lm4_model%Time_restart = decrement_date(lm4_model%Time_restart, 0,0,0,0,0, lm4_model%nml%dt_lnd_slow)
-            timestamp = date_to_string(lm4_model%Time_restart)
-            call ESMF_LogWrite('LM4 init_driver: Time_restart after decrement' //trim(timestamp), ESMF_LOGMSG_INFO)
-         
+         ! subtract the slow time step in seconds
+         timestamp = date_to_string(lm4_model%Time_restart)
+         call ESMF_LogWrite('LM4 init_driver: Time_restart before decrement' //trim(timestamp), ESMF_LOGMSG_INFO)
+         lm4_model%Time_restart = decrement_date(lm4_model%Time_restart, 0,0,0,0,0, lm4_model%nml%dt_lnd_slow)
+         timestamp = date_to_string(lm4_model%Time_restart)
+         call ESMF_LogWrite('LM4 init_driver: Time_restart after decrement' //trim(timestamp), ESMF_LOGMSG_INFO)
+
 
          if (lm4_model%Time_restart < lm4_model%Time_land) then
             call ESMF_LogWrite('The first intermediate restart time is larger than the start time', &
                ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
             call ESMF_Finalize(endflag=ESMF_END_ABORT)
-            
+
          endif
 
       endif
@@ -285,9 +285,9 @@ contains
       if (trim(gust_to_use)=='computed') then
          ! can't use with CDEPS atm, since no ustar/bstar provided in atm forcing or restarts
          call ESMF_LogWrite('Computed gustiness reinitializes gust on initialization with this data atmosphere.', &
-         ESMF_LOGMSG_WARNING, line=__LINE__, file=__FILE__)
+            ESMF_LOGMSG_WARNING, line=__LINE__, file=__FILE__)
          call ESMF_LogWrite('Restarting is NOT reproducible with continous run', &
-         ESMF_LOGMSG_WARNING, line=__LINE__, file=__FILE__)
+            ESMF_LOGMSG_WARNING, line=__LINE__, file=__FILE__)
       elseif (trim(gust_to_use)=='prescribed') then
          call ESMF_LogWrite('Using prescribed gustiness', ESMF_LOGMSG_INFO)
          write(logmsg, '(A,F6.2)') 'gustiness = ', gustiness
@@ -308,8 +308,8 @@ contains
       type(lm4_type), intent(inout) :: lm4_model ! land model's variable type
 
       type(time_type)       :: Time_restart_stamp ! datetime stamp for restart file
-          
-      !--- write out intermediate restart file when needed.                                                                                                                                           
+
+      !--- write out intermediate restart file when needed.
       if (lm4_model%Time_land >= lm4_model%Time_restart) then
          lm4_model%Time_restart = increment_date(lm4_model%Time_land, lm4_model%nml%restart_interval(1), lm4_model%nml%restart_interval(2), &
             lm4_model%nml%restart_interval(3), lm4_model%nml%restart_interval(4), lm4_model%nml%restart_interval(5), lm4_model%nml%restart_interval(6) )
@@ -320,8 +320,8 @@ contains
          timestamp = date_to_string(Time_restart_stamp)
          call ESMF_LogWrite('write_int_restart restart is written for '//trim(timestamp), ESMF_LOGMSG_INFO)
          call land_model_restart(timestamp)
-       endif
-   
+      endif
+
    end subroutine write_int_restart
 
    !! ============================================================================
@@ -332,7 +332,6 @@ contains
    !! used to compute an implicit flux correction.
    !! ============================================================================
    subroutine sfc_boundary_layer( dt,lm4_model )
-   ! subroutine sfc_boundary_layer( dt )
 
 
       use sat_vapor_pres_mod, only: compute_qs
@@ -407,7 +406,7 @@ contains
       ! values added for LM3
 
          ex_e_t_n    ,  &
-         !ex_e_q_n    ,  &
+      !ex_e_q_n    ,  &
 
       !
          ex_albedo_fix,        &
@@ -504,24 +503,24 @@ contains
       ! call send_tile_data(iug_gust       , ex_gust       )
 
 
-         ex_tr_surf(1,isphum) = ex_q_surf(1)  ! TODO: review this connection 
+      ex_tr_surf(1,isphum) = ex_q_surf(1)  ! TODO: review this connection
 
 
       !1 TODO: make sure output args that are used outside of this routine have the right scope
       call lm4_surface_flux_1d ( &
-         ! inputs
+      ! inputs
          lm4_model%atm_forc%t_bot, lm4_model%atm_forc%q_bot,  & !! TODO: link q_bot var and tracer field
          lm4_model%atm_forc%u_bot, lm4_model%atm_forc%v_bot,  lm4_model%atm_forc%p_bot, &
          lm4_model%atm_forc%z_bot, lm4_model%atm_forc%p_surf, lm4_model%From_lnd%t_surf(:,ntile), &
          lm4_model%From_lnd%t_ca(:,ntile), &
-         ! inout
+      ! inout
          ex_tr_surf(:,isphum),         & !! TODO review using q_bot as surface Q (this is inout).
-         ! more inputs
+      ! more inputs
          ex_u_surf, ex_v_surf,             & ! 0s
          lm4_model%From_lnd%rough_mom(:,ntile), lm4_model%From_lnd%rough_heat(:,ntile), &
          ex_rough_moist, lm4_model%From_lnd%rough_scale(:,ntile),   &
          lm4_model%atm_forc%gust,                                                       & ! gustiness
-         ! outputs
+      ! outputs
          ex_flux_t, ex_flux_tr(:,isphum), ex_flux_lw,   &
          ex_flux_u, ex_flux_v, ex_cd_m,   ex_cd_t, &
          ex_cd_q,   ex_wind,   ex_u_star, ex_b_star, &
@@ -532,7 +531,7 @@ contains
          ex_land, ex_seawater, ex_avail                                       & ! Is land, Is seawater, Is ex. avail
          )
 
-         ex_q_surf(1) = ex_tr_surf(1,isphum)  ! TODO: review this connection
+      ex_q_surf(1) = ex_tr_surf(1,isphum)  ! TODO: review this connection
 
 
       !! ....
@@ -661,7 +660,7 @@ contains
       ! ! lots of send_data stuff originally here, removed
       ! ! TODO: get diag history write back in
 
-    ! JP DEBUG
+      ! JP DEBUG
       ! if (mpp_pe()== mpp_root_pe() ) then
       !    write(*,*) 'calling write_data at end of sfc_boundary_layer-------'
       !    call write_data(lm4_model)
@@ -672,7 +671,7 @@ contains
    !! ============================================================================
    !! Adapted from GFDL atm_land_ice_flux_exchange,
    !! stripped down to be "land only" on unstructured grid
-   !! In original code, caculates radiation, damping, and vertical diffusion of 
+   !! In original code, caculates radiation, damping, and vertical diffusion of
    !! momentum, tracers, and downward heat/moisture
    !! For Data Atmosphere, this is only used for gustiness
    !! ============================================================================
@@ -682,19 +681,19 @@ contains
 
       ! Original code here calculated net shortwave fluxes from downward shortwave fluxes and surface albedos
       ! TODO: move data atmosphere sw flux calculation from imports here?
-      
+
       call compute_gust(lm4_model)
-         
+
       !! Original code calculated Atmos%Surf_diff%dtmass and reset Sfc%dt_tr = 0.0 here
       !! If needed by LM4 with active atmosphere, this would need to be added back in
 
    end subroutine update_atmos_model_down
 
    !! ============================================================================
-   !! Put prescribed atmosphere gust calculation in its own subroutine, 
+   !! Put prescribed atmosphere gust calculation in its own subroutine,
    !! so it can be called both from update_atmos_model_down and at initialization.
    !! Note that:
-   !! 1) If alt_gustiness= T from surface_flux_nml, absolute wind in suface 
+   !! 1) If alt_gustiness= T from surface_flux_nml, absolute wind in suface
    !!    flux will not use this gustiness.
    !! 2) If gust_to_use= 'computed', there will not be restart prodicibility with
    !!    UFS Data Atmosphere, since u_star and b_star are not saved in restarts.
@@ -716,8 +715,8 @@ contains
       else
          call ESMF_LogWrite('update_atmos_down: illegal value of gust_to_use', &
             ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
-         call ESMF_Finalize(endflag=ESMF_END_ABORT)         
-      end if     
+         call ESMF_Finalize(endflag=ESMF_END_ABORT)
+      end if
 
    end subroutine compute_gust
 
@@ -732,7 +731,6 @@ contains
    !! fluxes through the top of this layer.
    !! ============================================================================
    subroutine flux_down_from_atmos(dt, lm4_model)
-   ! subroutine flux_down_from_atmos()
 
       use constants_mod,    only: cp_air, grav
 
@@ -750,13 +748,13 @@ contains
          ex_flux_sw_vis, &
          ex_flux_sw_vis_dir, &
          ex_flux_sw_vis_dif, &
-         ! ex_tprec, & ! temperature of precipitation, currently equal to atm T
+      ! ex_tprec, & ! temperature of precipitation, currently equal to atm T
          ex_dtmass, ex_gamma, ex_e_t_n, ex_f_t_delt_n, &
          ex_delta_t, ex_dflux_t, ex_e_q_n
 
-         real, dimension(lnd%ls:lnd%le,ntcana) ::  &
-          ex_dflux_tr, & ! tracer flux change. TODO: NEED TO FETCH
-          ex_delta_tr ! tracer tendencies. TODO: NEED TO FETCH
+      real, dimension(lnd%ls:lnd%le,ntcana) ::  &
+         ex_dflux_tr, & ! tracer flux change. TODO: NEED TO FETCH
+         ex_delta_tr ! tracer tendencies. TODO: NEED TO FETCH
 
       real :: cp_inv
 
@@ -792,13 +790,13 @@ contains
       ! for implicit coupling with active atmosphere.
       ex_delta_tr = 0.0
       ex_dflux_tr = 0.0
-      ex_delta_t = 0.0  ! 
+      ex_delta_t = 0.0  !
       ex_dflux_t = 0.0  !
 
       do l = lnd%ls,lnd%le
          !----- compute net longwave flux (down-up) -----
          ! (note: lw up already in ex_flux_lw)
-         ex_flux_lw(l) = ex_flux_lwd(l) - ex_flux_lw(l)  ! TODO: review if needed 
+         ex_flux_lw(l) = ex_flux_lwd(l) - ex_flux_lw(l)  ! TODO: review if needed
 
          ! temperature
          ex_gamma(l)      =  1./ (1.0 - ex_dtmass(l)*(ex_dflux_t(l) + ex_dhdt_atm(l)*cp_inv))
@@ -878,51 +876,239 @@ contains
       lm4_model%From_atm%tr_flux = 0.0
       lm4_model%From_atm%dfdtr = 0.0
       do tr = 1,ntcana
-            lm4_model%From_atm%tr_flux(:,ntile,tr) = ex_flux_tr(:,tr)
-            lm4_model%From_atm%dfdtr(:,ntile,tr)   = ex_dfdtr_surf(:,tr)
+         lm4_model%From_atm%tr_flux(:,ntile,tr) = ex_flux_tr(:,tr)
+         lm4_model%From_atm%dfdtr(:,ntile,tr)   = ex_dfdtr_surf(:,tr)
       enddo
 
    end subroutine flux_down_from_atmos
 
    !! ============================================================================
-   !! flux_up_to_atmos will be completed for 2-way coupling to active atmosphere
+   !! Adapted from GFDL atm_land_ice_flux_exchange.
+   !! Corrects the fluxes for consistency with the new surface temperatures in land
+   !! Final increments for temperature and specific humidity in the
+   !! lowest atmospheric layer are computed to be returned to the atmospheric model
    !! ============================================================================
    subroutine  flux_up_to_atmos( Land )
 
       type(land_data_type),  intent(in)    :: Land !< A derived data type to specify land boundary data
 
-      !   where (Land%mask(:,:,1))
-      !      t_surf_new = Land%t_surf(:,:,1)
-      !      t_ca_new   = Land%t_ca  (:,:,1)
-      !   endwhere
+      real, allocatable, dimension(:) :: &
+         ex_t_surf_new, &
 
-      !   !??????? should this be done in land model ??????
-      !   call escomp (t_surf_new, q_surf_new)
-      !   where (Land%mask(:,:,1))
-      !      q_surf_new = Land%tr(:,:,1,1)
-      !   elsewhere
-      !      !q_surf_new = d622*q_surf_new/(p_surf-d378*q_surf_new)
-      !   endwhere
+         ex_t_surf_new = 200.0
 
-      !   dt_t_ca   = t_ca_new   - t_ca   ! changes in near-surface T
-      !   dt_t_surf = t_surf_new - t_surf ! changes in radiative T
-      !   dt_q_surf = q_surf_new - q_surf ! changes in near-surface q
+      call put_to_xgrid (Ice%t_surf,  'OCN', ex_t_surf_new, xmap_sfc)
+      ex_t_ca_new = ex_t_surf_new  ! since it is the same thing over oceans
+      call put_to_xgrid_land (Land%t_ca,   'LND', ex_t_ca_new,   xmap_sfc)
+      call put_to_xgrid_land (Land%t_surf, 'LND', ex_t_surf_new, xmap_sfc)
 
-      !   ! adjust fluxes and atmospheric increments for
-      !   ! implicit dependence on surface temperature
 
-      !   flux_t        = flux_t      + dt_t_ca  *dhdt_surf
-      !   flux_lw       = flux_lw     - dt_t_surf*drdt_surf
-      !   Boundary%dt_t = f_t_delt_n  + dt_t_ca  *e_t_n
+      do l = 1, my_nblocks
+         is=block_start(l)
+         ie=block_end(l)
+         do i = is, ie
+            if(ex_avail(i)) then
+               ex_dt_t_ca(i)  = ex_t_ca_new(i)   - ex_t_ca(i)   ! changes in near-surface T
+               ex_dt_t_surf(i) = ex_t_surf_new(i) - ex_t_surf(i) ! changes in radiative T
+            endif
+         enddo
 
-      !   where (Land%mask(:,:,1))
-      !      flux_q                     = flux_q      + dt_q_surf*dedq_surf
-      !      Boundary%dt_tr(:,:,isphum) = f_q_delt_n  + dt_q_surf*e_q_n
-      !   elsewhere
-      !      !flux_q                     = flux_q      + dt_t_surf*dedt_surf
-      !      !Boundary%dt_tr(:,:,isphum) = f_q_delt_n  + dt_t_surf*e_q_n
-      !   endwhere
+         if (do_forecast) then
+            do i = is, ie
+               if(ex_avail(i) .and. (.not.ex_land(i))) then
+                  ex_dt_t_ca  (i) = 0.
+                  ex_dt_t_surf(i) = 0.
+               endif
+            enddo
+         end if
 
+         !-----------------------------------------------------------------------
+         !-----  adjust fluxes and atmospheric increments for
+         !-----  implicit dependence on surface temperature -----
+         do tr = 1,n_exch_tr
+            ! set up updated surface tracer field so that flux to atmos for absent
+            ! tracers is zero
+            do i = is,ie
+               if(.not.ex_avail(i)) cycle
+               if (ex_dfdtr_surf(i,tr)/=0.0) then
+                  ex_dt_tr_surf(i,tr) = -ex_flux_tr(i,tr)/ex_dfdtr_surf(i,tr)
+               else
+                  ex_dt_tr_surf(i,tr) = 0.0
+               endif
+               ex_tr_surf_new(i,tr) = ex_tr_surf(i,tr)+ex_dt_tr_surf(i,tr)
+            enddo
+         enddo
+      enddo !  l = 1, my_nblocks
+      ! get all tracers available from land, and calculate changes in near-tracer field
+      do tr = 1,n_exch_tr
+         n = tr_table(tr)%lnd
+         if(n /= NO_TRACER ) then
+            call put_to_xgrid_land ( Land%tr(:,:,:,n), 'LND', ex_tr_surf_new(:,tr), xmap_sfc )
+         endif
+      enddo
+
+      ! update tracer tendencies in the atmosphere
+      do l = 1, my_nblocks
+         is=block_start(l)
+         ie=block_end(l)
+         do tr = 1,n_exch_tr
+            do i = is, ie
+               if(ex_avail(i)) then
+                  ex_dt_tr_surf(i,tr) = ex_tr_surf_new(i,tr) - ex_tr_surf(i,tr)
+                  ex_delta_tr_n(i,tr) = ex_f_tr_delt_n(i,tr) + ex_dt_tr_surf(i,tr) * ex_e_tr_n(i,tr)
+                  ex_flux_tr(i,tr)    = ex_flux_tr(i,tr)     + ex_dt_tr_surf(i,tr) * ex_dfdtr_surf(i,tr)
+               endif
+            enddo
+         enddo
+      enddo
+
+      do tr=1,n_exch_tr
+         ! get updated tracer tendency on the atmospheic grid
+         n=tr_table(tr)%atm
+         call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr(:,:,n), 'ATM', ex_delta_tr_n(:,tr), xmap_sfc)
+      enddo
+
+      do l = 1, my_nblocks
+         is=block_start(l)
+         ie=block_end(l)
+         do i = is, ie
+            ex_delta_t_n(i) = 0.0
+            if(ex_avail(i)) then
+               ex_flux_t(i)    = ex_flux_t(i)  + ex_dt_t_ca(i)   * ex_dhdt_surf(i)
+               ex_flux_lw(i)   = ex_flux_lw(i) - ex_dt_t_surf(i) * ex_drdt_surf(i)
+               ex_delta_t_n(i) = ex_f_t_delt_n(i)  + ex_dt_t_ca(i)*ex_e_t_n(i)
+            endif
+         enddo
+      enddo
+
+      !-----------------------------------------------------------------------
+      !---- get mean quantites on atmospheric grid ----
+
+      call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_t, 'ATM', ex_delta_t_n, xmap_sfc)
+      call get_from_xgrid (Land_Ice_Atmos_Boundary%shflx,'ATM', ex_flux_t    , xmap_sfc) !miz
+      call get_from_xgrid (Land_Ice_Atmos_Boundary%lhflx,'ATM', ex_flux_tr(:,isphum), xmap_sfc)!miz
+
+      !=======================================================================
+      !-------------------- diagnostics section ------------------------------
+
+      !------- new surface temperature -----------
+
+      call get_from_xgrid (diag_atm, 'ATM', ex_t_surf_new, xmap_sfc)
+      if ( id_t_surf > 0 ) then
+         used = send_data ( id_t_surf, diag_atm, Time )
+      endif
+      if ( id_ts > 0 ) then
+         used = send_data ( id_ts, diag_atm, Time )
+      endif
+      call sum_diag_integral_field ('t_surf', diag_atm)
+
+      if ( id_ts_g > 0 ) used = send_global_diag ( id_ts_g, diag_atm, Time )
+
+      !------- new surface temperature only over land and sea-ice -----------
+      if ( id_tslsi > 0 ) then
+         ex_land_frac = 0.0
+         call put_logical_to_real (Land%mask, 'LND', ex_land_frac, xmap_sfc)
+         icegrid = 1.0; icegrid(:,:,1) = 0.
+         ex_icetemp = 0.
+         call put_to_xgrid (icegrid, 'OCN', ex_icetemp, xmap_sfc)
+         ex_icetemp = ex_icetemp + ex_land_frac
+         ex_temp = ex_t_surf_new * ex_icetemp
+         call get_from_xgrid (diag_atm, 'ATM', ex_temp, xmap_sfc)
+         call get_from_xgrid (frac_atm, 'ATM', ex_icetemp, xmap_sfc)
+         where (frac_atm > 0.0)
+            diag_atm = diag_atm/frac_atm
+            frac_atm = 1.0
+         elsewhere
+            diag_atm = 0.0
+            frac_atm = 0.0
+         endwhere
+         used = send_data ( id_tslsi, diag_atm, Time, rmask=frac_atm )
+      endif
+
+      ! + slm, Mar 27 2002
+      ! ------ new canopy temperature --------
+      !   NOTE, that in the particular case of LM2 t_ca is identical to t_surf,
+      !   but this will be changed in future version of the land madel
+      if ( id_t_ca > 0 ) then
+         call get_from_xgrid (diag_atm, 'ATM', ex_t_ca_new, xmap_sfc)
+         used = send_data ( id_t_ca, diag_atm, Time )
+      endif
+
+      !------- updated surface tracer fields ------
+      do tr=1,n_exch_tr
+         call get_tracer_names( MODEL_ATMOS, tr_table(tr)%atm, tr_name )
+         if ( id_tr_surf(tr) > 0 ) then
+            call get_from_xgrid (diag_atm, 'ATM', ex_tr_surf_new(:,tr), xmap_sfc)
+            used = send_data ( id_tr_surf(tr), diag_atm, Time )
+         endif
+         !!jgj:  add dryvmr co2_surf
+         ! - slm Mar 25, 2010: moved to resolve interdependence of diagnostic fields
+         if ( id_co2_surf_dvmr > 0 .and. lowercase(trim(tr_name))=='co2') then
+            ex_co2_surf_dvmr = (ex_tr_surf_new(:,tr) / (1.0 - ex_tr_surf_new(:,isphum))) * WTMAIR/WTMCO2
+            call get_from_xgrid (diag_atm, 'ATM', ex_co2_surf_dvmr, xmap_sfc)
+            used = send_data ( id_co2_surf_dvmr, diag_atm, Time )
+         endif
+      enddo
+
+      !------- sensible heat flux -----------
+      if ( id_t_flux > 0 .or. id_hfss > 0 .or. id_hfss_g > 0 ) then
+         call get_from_xgrid (diag_atm, 'ATM', ex_flux_t, xmap_sfc)
+         if ( id_t_flux > 0 ) used = send_data ( id_t_flux, diag_atm, Time )
+         if ( id_hfss   > 0 ) used = send_data ( id_hfss, diag_atm, Time )
+         if ( id_hfss_g > 0 ) used = send_global_diag ( id_hfss_g, diag_atm, Time )
+      endif
+
+      !------- net longwave flux -----------
+      if ( id_r_flux > 0 .or. id_rls_g > 0 ) then
+         call get_from_xgrid (diag_atm, 'ATM', ex_flux_lw, xmap_sfc)
+         if ( id_r_flux > 0 ) used = send_data ( id_r_flux, diag_atm, Time )
+         if ( id_rls_g  > 0 ) used = send_global_diag ( id_rls_g, diag_atm, Time )
+      endif
+
+
+      !------- tracer fluxes ------------
+      ! tr_mol_flux diagnostic will be correct for co2 tracer only.
+      ! will need update code to use correct molar mass for tracers other than co2
+      do tr=1,n_exch_tr
+         if ( id_tr_flux(tr) > 0 .or. id_tr_mol_flux(tr) > 0 ) then
+            call get_from_xgrid (diag_atm, 'ATM', ex_flux_tr(:,tr), xmap_sfc)
+            call get_tracer_names( MODEL_ATMOS, tr_table(tr)%atm, tr_name, units=tr_units )
+            if (id_tr_flux(tr) > 0 ) &
+               used = send_data ( id_tr_flux(tr), diag_atm, Time )
+            !     if (id_tr_mol_flux(tr) > 0 ) &
+            !          used = send_data ( id_tr_mol_flux(tr), diag_atm*1000./WTMCO2, Time)
+            ! 2017/08/08 jgj - replaced 2 lines above by the following
+            if (id_tr_mol_flux(tr) > 0 .and. lowercase(trim(tr_name))=='co2') then
+               used = send_data ( id_tr_mol_flux(tr), diag_atm*1000./WTMCO2, Time)
+               !sometimes in 2018 f1p for vmr tracers
+            elseif (id_tr_mol_flux(tr) > 0 .and. lowercase(trim(tr_units)).eq."vmr") then
+               call get_from_xgrid (diag_atm, 'ATM', ex_flux_tr(:,tr)*(1.-ex_tr_surf_new(:,isphum)), xmap_sfc)
+               used = send_data ( id_tr_mol_flux(tr), diag_atm*1000./WTMAIR, Time)
+            endif
+         endif
+      enddo
+
+      if ( id_t_flux_land > 0 ) then
+         call get_from_xgrid_land (diag_land, 'LND', ex_flux_t, xmap_sfc)
+         call send_tile_data ( id_t_flux_land, diag_land )
+      endif
+      !------- tracer fluxes for land
+      do tr=1,n_exch_tr
+         if ( id_tr_flux_land(tr) > 0 .or. id_tr_mol_flux_land(tr) > 0 ) then
+            call get_tracer_names( MODEL_ATMOS, tr_table(tr)%atm, tr_name, units=tr_units )
+            call get_from_xgrid_land (diag_land, 'LND', ex_flux_tr(:,tr), xmap_sfc)
+            if (id_tr_flux_land(tr) > 0 ) &
+               call send_tile_data (id_tr_flux_land(tr), diag_land )
+            if (id_tr_mol_flux_land(tr) > 0) then
+               if (lowercase(trim(tr_name))=='co2') then
+                  call send_tile_data (id_tr_mol_flux_land(tr), diag_land*1000./WTMCO2)
+               elseif (lowercase(trim(tr_units)).eq.'vmr') then
+                  call get_from_xgrid_land (diag_land, 'LND', ex_flux_tr(:,tr)*(1.-ex_tr_surf_new(:,isphum)), xmap_sfc)
+                  call send_tile_data (id_tr_mol_flux_land(tr), diag_atm*1000./WTMAIR )
+               endif
+            endif
+         endif
+      enddo
 
 
    end subroutine flux_up_to_atmos
@@ -1167,7 +1353,7 @@ contains
          ex_drdt_surf, ex_dhdt_atm, ex_tr_atm, ex_tr_surf, &
          ex_flux_tr, ex_dfdtr_surf, ex_dfdtr_atm, ex_e_tr_n, &
          ex_f_tr_delt_n, &
-         ex_drag_q,    &   
+         ex_drag_q,    &
          ex_cd_t,      &
          ex_cd_m,      &
          ex_b_star,    &
@@ -1175,7 +1361,7 @@ contains
          ex_wind,      &
          ex_z_atm               )
 
-      
+
    end subroutine end_driver
 
 
