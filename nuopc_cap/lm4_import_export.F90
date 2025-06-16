@@ -466,6 +466,8 @@ contains
       ! local variables
       type(ESMF_State)            :: importState
       character(len=*), parameter :: subname=trim(modName)//':(import_fields)'
+      logical           :: first_call = .true.  ! JP TMP DEBUG
+
       ! ----------------------------------------------
 
       rc = ESMF_SUCCESS
@@ -506,13 +508,22 @@ contains
       ! call state_getimport_2d(importState, 'Sa_zorl',   lm4data_1d=lm4_model%atm_forc%zorl, rc=rc)   ! roughness length
 
       ! JP TMP overwrite data
-      lm4_model%atm_forc%z_bot = 30.0
-      lm4_model%atm_forc%t_bot = 300.0
-      lm4_model%atm_forc%p_bot = 98440
-      lm4_model%atm_forc%u_bot = 2.0
-      lm4_model%atm_forc%v_bot = 1.0
-      lm4_model%atm_forc%q_bot = 3.0E-003
-      lm4_model%atm_forc%p_surf = 97015
+      ! lm4_model%atm_forc%z_bot = 30.0
+      ! lm4_model%atm_forc%t_bot = 300.0
+      ! lm4_model%atm_forc%p_bot = 98440
+      ! lm4_model%atm_forc%u_bot = 2.0
+      ! lm4_model%atm_forc%v_bot = 1.0
+      ! lm4_model%atm_forc%q_bot = 3.0E-003
+      ! lm4_model%atm_forc%p_surf = 97015
+
+      ! only do this on 1st time step
+      if (first_call) then
+         write( *,*) 'JPp using init value of lm4_model%atm_forc%p_surf'
+         lm4_model%atm_forc%p_surf = 97015
+         first_call = .false.
+      else
+         !lm4_model%atm_forc%p_surf = 97015
+      end if
       ! JP END
 
 
@@ -667,22 +678,22 @@ contains
       call state_setexport_2d(exportState, 'Sl_lfrin', lnd%sg_landfrac,rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-      ! JP TMP fill export fields used by noah
+      !JP TMP fill export fields used by noah
       if (send_to_atm) then     
-         call state_setexport_2d(exportState, 'Fall_lat',  0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_sen',  0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_evap', 0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_tref',   300*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_qref',   0.0003*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_q',      0.0003*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_gflx', 0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_roff', 0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_soff', 0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_cmm',    0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_chh',    0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_zvfun',  0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_lat',  0.000001+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_sen',  0.000001+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_evap', 0.000001+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_tref',   300.0+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_qref',   0.0003*+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_q',      0.0003*+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_gflx', 0.0001+0*lnd%sg_landfrac,rc=rc)
+         ! call state_setexport_2d(exportState, 'Fall_roff', 0.0*lnd%sg_landfrac,rc=rc)
+         ! call state_setexport_2d(exportState, 'Fall_soff', 0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_cmm',    0.032+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_chh',    0.017+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_zvfun',  0.340+0.0*lnd%sg_landfrac,rc=rc)
       end if
-      ! JP END
+      !JP END
 
    end subroutine export_fields
 
@@ -766,6 +777,7 @@ contains
 
          ! pass structured grid data to unstructured grid
          if (present(lm4data_1d)) then
+
             call mpp_pass_sg_to_ug(lnd%ug_domain, fldptr2d, lm4data_1d)
          end if
 
