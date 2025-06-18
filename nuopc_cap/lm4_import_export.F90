@@ -507,25 +507,12 @@ contains
       ! call state_getimport_2d(importState, 'Sa_vfrac',  lm4data_1d=lm4_model%atm_forc%vfrac, rc=rc)  ! vegetation fraction
       ! call state_getimport_2d(importState, 'Sa_zorl',   lm4data_1d=lm4_model%atm_forc%zorl, rc=rc)   ! roughness length
 
-      ! JP TMP overwrite data
-      ! lm4_model%atm_forc%z_bot = 30.0
-      ! lm4_model%atm_forc%t_bot = 300.0
-      ! lm4_model%atm_forc%p_bot = 98440
-      ! lm4_model%atm_forc%u_bot = 2.0
-      ! lm4_model%atm_forc%v_bot = 1.0
-      ! lm4_model%atm_forc%q_bot = 3.0E-003
-      ! lm4_model%atm_forc%p_surf = 97015
-
       ! only do this on 1st time step
       if (first_call) then
          write( *,*) 'JPp using init value of lm4_model%atm_forc%p_surf'
          lm4_model%atm_forc%p_surf = 97015
          first_call = .false.
-      else
-         !lm4_model%atm_forc%p_surf = 97015
       end if
-      ! JP END
-
 
       if (ie_debug > 0) then ! Also want Structured Grid data
          call state_getimport_2d(importState, 'Sa_z',       lm4data_2d=lm4_model%atm_forc2d%z_bot,   rc=rc)
@@ -777,7 +764,6 @@ contains
 
          ! pass structured grid data to unstructured grid
          if (present(lm4data_1d)) then
-
             call mpp_pass_sg_to_ug(lnd%ug_domain, fldptr2d, lm4data_1d)
          end if
 
