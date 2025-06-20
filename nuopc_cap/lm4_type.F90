@@ -61,8 +61,15 @@ module lm4_type_mod
          flux_sw_vis            => NULL(), &
          flux_sw_vis_dir        => NULL(), &
          flux_sw_vis_dif        => NULL()
-
    end type atm_forc_type
+
+   ! type for data sent from LM4 to atmosphere through NUOPC mediator
+   type, public :: lm4_to_atm_type
+      real, pointer, dimension(:) ::  &
+         dt_t      => NULL(), &
+         shflx     => NULL(), &   ! sensible heat flux, W/m2   
+         lhflx     => NULL()      ! latent heat flux, W/m2
+   end type lm4_to_atm_type
 
    ! TMP DEBUG
    type, public :: atm_forc2d_type
