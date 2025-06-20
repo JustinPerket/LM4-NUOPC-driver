@@ -54,7 +54,9 @@ module lm4_driver
    namelist /atmos_prescr_nml/ gustiness, gust_to_use, gust_min
 
 
-   logical :: scale_precip_2d = .false.
+   ! logical :: scale_precip_2d = .false. ! placeholder if used in future
+   logical :: do_forecast = .false.
+
 
    ! variables for between subroutines
    real, allocatable, dimension(:) :: &
@@ -67,7 +69,10 @@ module lm4_driver
       ex_b_star,    &
       ex_u_star,    &
       ex_wind,      &
-      ex_z_atm   
+      ex_z_atm,     &
+      ex_avail,     &   !< true where data on exchange grid are available
+      ex_land           !< true if exchange grid cell is over land
+
 
    ! these originally had a tracer dimension
    real, allocatable, dimension(:,:) :: &
@@ -77,9 +82,7 @@ module lm4_driver
       ex_dfdtr_surf,  & !< d(tracer flux)/d(surf tracer)
       ex_dfdtr_atm,   & !< d(tracer flux)/d(atm tracer)
       ex_e_tr_n,      & !< coefficient in implicit scheme
-      ex_f_tr_delt_n, & !< coefficient in implicit scheme
-      ex_avail,       & !< true where data on exchange grid are available
-      ex_land           !< true if exchange grid cell is over land
+      ex_f_tr_delt_n    !< coefficient in implicit scheme
 
 
    !integer :: n_exch_tr !< number of tracers exchanged between models
@@ -256,7 +259,7 @@ contains
          ex_e_tr_n(lnd%ls:lnd%le,ntcana),      & !< coefficient in implicit scheme
          ex_f_tr_delt_n(lnd%ls:lnd%le,ntcana), & !< coefficient in implicit scheme
          ex_avail(lnd%ls:lnd%le),              & !< true where data on exchange grid are available
-         ex_land(lnd%ls:lnd%le)                  !< true if exchange grid cell is over land
+         ex_land(lnd%ls:lnd%le)                & !< true if exchange grid cell is over land
          )
 
       ! initialize ex_avail and ex_land
@@ -421,7 +424,7 @@ contains
          ex_albedo_nir_dif_fix
 
       integer :: tr, n, m ! tracer indices
-      integer :: i
+      integer :: l
 
 
 
@@ -547,12 +550,12 @@ contains
          ex_del_m, ex_del_h, ex_del_q, ex_avail  )
       ! write(*,*) 'DEBUG: done calling mo_profile'
 
-      do i = lnd%ls,lnd%le
-         ex_u10(i) = 0.
-         if(ex_avail(i)) then
-            ex_ref_u(i) = ex_u_surf(i) + (lm4_model%atm_forc%u_bot(i)-ex_u_surf(i)) * ex_del_m(i)
-            ex_ref_v(i) = ex_v_surf(i) + (lm4_model%atm_forc%v_bot(i)-ex_v_surf(i)) * ex_del_m(i)
-            ex_u10(i) = sqrt(ex_ref_u(i)**2 + ex_ref_v(i)**2)
+      do l = lnd%ls,lnd%le
+         ex_u10(l) = 0.
+         if(ex_avail(l)) then
+            ex_ref_u(l) = ex_u_surf(l) + (lm4_model%atm_forc%u_bot(l)-ex_u_surf(l)) * ex_del_m(l)
+            ex_ref_v(l) = ex_v_surf(l) + (lm4_model%atm_forc%v_bot(l)-ex_v_surf(l)) * ex_del_m(l)
+            ex_u10(l) = sqrt(ex_ref_u(l)**2 + ex_ref_v(l)**2)
          endif
       enddo
 
@@ -560,28 +563,28 @@ contains
       ! do n = 1, ex_gas_fields_atm%num_bcs  !{
       !    if (atm%fields%bc(n)%use_10m_wind_speed) then  !{
       !       if (.not. ex_gas_fields_atm%bc(n)%field(ind_u10)%override) then  !{
-      !          do i = lnd%ls,lnd%le
-      !             ex_gas_fields_atm%bc(n)%field(ind_u10)%values(i) = ex_u10(i)
+      !          do l = lnd%ls,lnd%le
+      !             ex_gas_fields_atm%bc(n)%field(ind_u10)%values(l) = ex_u10(l)
       !          enddo
       !       endif  !}
       !    endif  !}
       ! enddo  !} n
 
-      do i = lnd%ls,lnd%le
-         if(ex_avail(i)) ex_drag_q(i) = ex_wind(i)*ex_cd_q(i)
+      do l = lnd%ls,lnd%le
+         if(ex_avail(l)) ex_drag_q(l) = ex_wind(l)*ex_cd_q(l)
          ! [6] get mean quantities on atmosphere grid
          ! [6.1] compute t surf for radiation
-         ex_t_surf4(i) = ex_t_surf(i) ** 4
+         ex_t_surf4(l) = ex_t_surf(l) ** 4
       enddo
 
       ! [6.3] save atmos albedo fix and old albedo (for downward SW flux calculations)
       ! on exchange grid
-      do i = lnd%ls,lnd%le
-         ex_albedo_fix(i) = 0.
-         ex_albedo_vis_dir_fix(i) = 0.
-         ex_albedo_nir_dir_fix(i) = 0.
-         ex_albedo_vis_dif_fix(i) = 0.
-         ex_albedo_nir_dif_fix(i) = 0.
+      do l = lnd%ls,lnd%le
+         ex_albedo_fix(l) = 0.
+         ex_albedo_vis_dir_fix(l) = 0.
+         ex_albedo_nir_dir_fix(l) = 0.
+         ex_albedo_vis_dif_fix(l) = 0.
+         ex_albedo_nir_dif_fix(l) = 0.
       enddo
 
 
@@ -615,12 +618,12 @@ contains
 
 
       ! ! TODO: Is this needed? do these have the right scope?
-      ! do i = lnd%ls,lnd%le
-      !    ex_albedo_fix(i) = (1.0-ex_albedo(i)) / (1.0-ex_albedo_fix(i))
-      !    ex_albedo_vis_dir_fix(i) = (1.0-ex_albedo_vis_dir(i)) / (1.0-ex_albedo_vis_dir_fix(i))
-      !    ex_albedo_nir_dir_fix(i) = (1.0-ex_albedo_nir_dir(i)) / (1.0-ex_albedo_nir_dir_fix(i))
-      !    ex_albedo_vis_dif_fix(i) = (1.0-ex_albedo_vis_dif(i)) / (1.0-ex_albedo_vis_dif_fix(i))
-      !    ex_albedo_nir_dif_fix(i) = (1.0-ex_albedo_nir_dif(i)) / (1.0-ex_albedo_nir_dif_fix(i))
+      ! do l = lnd%ls,lnd%le
+      !    ex_albedo_fix(l) = (1.0-ex_albedo(l)) / (1.0-ex_albedo_fix(l))
+      !    ex_albedo_vis_dir_fix(l) = (1.0-ex_albedo_vis_dir(l)) / (1.0-ex_albedo_vis_dir_fix(l))
+      !    ex_albedo_nir_dir_fix(l) = (1.0-ex_albedo_nir_dir(l)) / (1.0-ex_albedo_nir_dir_fix(l))
+      !    ex_albedo_vis_dif_fix(l) = (1.0-ex_albedo_vis_dif(l)) / (1.0-ex_albedo_vis_dif_fix(l))
+      !    ex_albedo_nir_dif_fix(l) = (1.0-ex_albedo_nir_dif(l)) / (1.0-ex_albedo_nir_dif_fix(l))
       ! enddo
 
 
@@ -636,26 +639,26 @@ contains
       ! !cjg     if ( id_rh_ref > 0 .or. id_rh_ref_land > 0 .or. &
       ! !cjg          id_rh_ref_cmip > 0 .or. &
       ! !cjg          id_q_ref > 0 .or. id_q_ref_land >0 ) then
-      ! do i = lnd%ls,lnd%le
-      !    ex_ref(i) = 1.0e-06
-      !    if (ex_avail(i)) &
-      !       ex_ref(i)   = ex_tr_surf(i,isphum) + (ex_tr_atm(i,isphum)-ex_tr_surf(i,isphum)) * ex_del_q(i)
+      ! do l = lnd%ls,lnd%le
+      !    ex_ref(l) = 1.0e-06
+      !    if (ex_avail(l)) &
+      !       ex_ref(l)   = ex_tr_surf(l,isphum) + (ex_tr_atm(l,isphum)-ex_tr_surf(l,isphum)) * ex_del_q(l)
       ! enddo
 
-      ! do i = lnd%ls,lnd%le
-      !    ex_t_ref(i) = 200.
-      !    if(ex_avail(i)) &
-      !       ex_t_ref(i) = ex_t_ca(i) + (lm4_model%atm_forc%t_bot(i)-ex_t_ca(i)) * ex_del_h(i)
+      ! do l = lnd%ls,lnd%le
+      !    ex_t_ref(l) = 200.
+      !    if(ex_avail(l)) &
+      !       ex_t_ref(l) = ex_t_ca(l) + (lm4_model%atm_forc%t_bot(l)-ex_t_ca(l)) * ex_del_h(l)
       ! enddo
       ! call compute_qs (ex_t_ref(:), ex_p_surf(:), ex_qs_ref(:), q = ex_ref(:))
       ! call compute_qs (ex_t_ref(:), ex_p_surf(:), ex_qs_ref_cmip(:),  &
       !    q = ex_ref(:), es_over_liq_and_ice = .true.)
-      ! do i = lnd%ls,lnd%le
-      !    if(ex_avail(i)) then
+      ! do l = lnd%ls,lnd%le
+      !    if(ex_avail(l)) then
       !       ! remove cap on relative humidity -- this mod requested by cjg, ljd
       !       !RSH    ex_ref    = MIN(100.,100.*ex_ref/ex_qs_ref)
-      !       ex_ref2(i)   = 100.*ex_ref(i)/ex_qs_ref_cmip(i)
-      !       ex_ref(i)    = 100.*ex_ref(i)/ex_qs_ref(i)
+      !       ex_ref2(l)   = 100.*ex_ref(l)/ex_qs_ref_cmip(l)
+      !       ex_ref(l)    = 100.*ex_ref(l)/ex_qs_ref(l)
       !    endif
       ! enddo
 
@@ -771,10 +774,6 @@ contains
       ! 6. data overrides
 
 
-      ! ex_flux_sw_dir            =
-      ! ex_flux_sw_vis_dir        =
-      ! ex_flux_sw_dif            =
-      ! ex_flux_sw_vis_dif        =
       ex_flux_sw_down_vis_dir   = lm4_model%atm_forc%flux_sw_down_vis_dir
       ex_flux_sw_down_vis_dif   = lm4_model%atm_forc%flux_sw_down_vis_dif
       ex_flux_sw_down_total_dir = lm4_model%atm_forc%flux_sw_down_vis_dir + lm4_model%atm_forc%flux_sw_down_nir_dir
@@ -892,11 +891,11 @@ contains
    !! ============================================================================
    subroutine  flux_up_to_atmos( lm4_model )
 
-      type(land_data_type),  intent(in)    :: Land !< A derived data type to specify land boundary data
+      type(lm4_type),        intent(inout)  :: lm4_model ! land model's variable type
 
-      real, allocatable, dimension(:) :: &
+      real, dimension(lnd%ls:lnd%le) :: &
          ex_t_surf_new, &
-         ex_t_ca_new   &
+         ex_t_ca_new    
 
       !----- compute surface temperature change ----- 
 
@@ -908,212 +907,202 @@ contains
       ex_t_surf = lm4_model%From_lnd%t_surf(:,ntile)
       ex_t_ca   = lm4_model%From_lnd%t_ca(:,ntile)
 
-      do l = 1, my_nblocks
-         is=block_start(l)
-         ie=block_end(l)
-         do i = is, ie
-            if(ex_avail(i)) then
-               ex_dt_t_ca(i)  = ex_t_ca_new(i)   - ex_t_ca(i)   ! changes in near-surface T
-               ex_dt_t_surf(i) = ex_t_surf_new(i) - ex_t_surf(i) ! changes in radiative T
-            endif
-         enddo
-
-         if (do_forecast) then
-            do i = is, ie
-               if(ex_avail(i) .and. (.not.ex_land(i))) then
-                  ex_dt_t_ca  (i) = 0.
-                  ex_dt_t_surf(i) = 0.
-               endif
-            enddo
-         end if
-
-         !-----------------------------------------------------------------------
-         !-----  adjust fluxes and atmospheric increments for
-         !-----  implicit dependence on surface temperature -----
-         do tr = 1,n_exch_tr
-            ! set up updated surface tracer field so that flux to atmos for absent
-            ! tracers is zero
-            do i = is,ie
-               if(.not.ex_avail(i)) cycle
-               if (ex_dfdtr_surf(i,tr)/=0.0) then
-                  ex_dt_tr_surf(i,tr) = -ex_flux_tr(i,tr)/ex_dfdtr_surf(i,tr)
-               else
-                  ex_dt_tr_surf(i,tr) = 0.0
-               endif
-               ex_tr_surf_new(i,tr) = ex_tr_surf(i,tr)+ex_dt_tr_surf(i,tr)
-            enddo
-         enddo
-      enddo !  l = 1, my_nblocks
-      ! get all tracers available from land, and calculate changes in near-tracer field
-      do tr = 1,n_exch_tr
-         n = tr_table(tr)%lnd
-         if(n /= NO_TRACER ) then
-            call put_to_xgrid_land ( Land%tr(:,:,:,n), 'LND', ex_tr_surf_new(:,tr), xmap_sfc )
+      do l = lnd%ls,lnd%le
+         if(ex_avail(l)) then
+            ex_dt_t_ca(l)  = ex_t_ca_new(l)   - ex_t_ca(l)   ! changes in near-surface T
+            ex_dt_t_surf(l) = ex_t_surf_new(l) - ex_t_surf(l) ! changes in radiative T
          endif
       enddo
 
-      ! update tracer tendencies in the atmosphere
-      do l = 1, my_nblocks
-         is=block_start(l)
-         ie=block_end(l)
-         do tr = 1,n_exch_tr
-            do i = is, ie
-               if(ex_avail(i)) then
-                  ex_dt_tr_surf(i,tr) = ex_tr_surf_new(i,tr) - ex_tr_surf(i,tr)
-                  ex_delta_tr_n(i,tr) = ex_f_tr_delt_n(i,tr) + ex_dt_tr_surf(i,tr) * ex_e_tr_n(i,tr)
-                  ex_flux_tr(i,tr)    = ex_flux_tr(i,tr)     + ex_dt_tr_surf(i,tr) * ex_dfdtr_surf(i,tr)
+      if (do_forecast) then
+         do l = lnd%ls,lnd%le
+               if(ex_avail(l) .and. (.not.ex_land(l))) then
+                  ex_dt_t_ca  (l) = 0.
+                  ex_dt_t_surf(l) = 0.
                endif
-            enddo
          enddo
+      end if
+
+      !-----------------------------------------------------------------------
+      !-----  adjust fluxes and atmospheric increments for
+      !-----  implicit dependence on surface temperature -----
+      ! JP notes original code uses n_exch_tr instead of ntcana
+      do tr = 1,ntcana
+         ! set up updated surface tracer field so that flux to atmos for absent
+         ! tracers is zero
+         do l = lnd%ls,lnd%le
+            if(.not.ex_avail(l)) cycle
+            if (ex_dfdtr_surf(l,tr)/=0.0) then
+               ex_dt_tr_surf(l,tr) = -ex_flux_tr(l,tr)/ex_dfdtr_surf(l,tr)
+            else
+               ex_dt_tr_surf(l,tr) = 0.0
+            endif
+               ex_tr_surf_new(l,tr) = ex_tr_surf(l,tr)+ex_dt_tr_surf(l,tr)
+            enddo
+      enddo
+      
+      ! TODO: review
+      ! get all tracers available from land, and calculate changes in near-tracer field
+      do tr = 1,ntcana
+         ex_tr_surf_new(:,tr) = lm4_model%From_lnd%tr(:,ntile,tr)
       enddo
 
-      do tr=1,n_exch_tr
-         ! get updated tracer tendency on the atmospheic grid
-         n=tr_table(tr)%atm
-         call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr(:,:,n), 'ATM', ex_delta_tr_n(:,tr), xmap_sfc)
-      enddo
-
-      do l = 1, my_nblocks
-         is=block_start(l)
-         ie=block_end(l)
-         do i = is, ie
-            ex_delta_t_n(i) = 0.0
-            if(ex_avail(i)) then
-               ex_flux_t(i)    = ex_flux_t(i)  + ex_dt_t_ca(i)   * ex_dhdt_surf(i)
-               ex_flux_lw(i)   = ex_flux_lw(i) - ex_dt_t_surf(i) * ex_drdt_surf(i)
-               ex_delta_t_n(i) = ex_f_t_delt_n(i)  + ex_dt_t_ca(i)*ex_e_t_n(i)
+      ! update tracer tendencies in the atmosphere
+      do tr = 1,ntcana
+         do l = lnd%ls,lnd%le
+            if(ex_avail(l)) then
+               ex_dt_tr_surf(l,tr) = ex_tr_surf_new(l,tr) - ex_tr_surf(l,tr)
+               ex_delta_tr_n(l,tr) = ex_f_tr_delt_n(l,tr) + ex_dt_tr_surf(l,tr) * ex_e_tr_n(l,tr)
+               ex_flux_tr(l,tr)    = ex_flux_tr(l,tr)     + ex_dt_tr_surf(l,tr) * ex_dfdtr_surf(l,tr)
             endif
          enddo
+      enddo
+
+      ! TODO: Fix. Do I need atmos_land_boundary_type at all?
+      ! do tr=1,ntcana
+      !    ! get updated tracer tendency on the atmospheic grid
+      !    n=tr_table(tr)%atm
+      !    Land_Ice_Atmos_Boundary%dt_tr(:,:,n) = ex_delta_tr_n(:,tr)
+      !    ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr(:,:,n), 'ATM', ex_delta_tr_n(:,tr), xmap_sfc)
+      ! enddo
+
+      do l = lnd%ls,lnd%le
+         ex_delta_t_n(l) = 0.0
+         if(ex_avail(l)) then
+            ex_flux_t(l)    = ex_flux_t(l)  + ex_dt_t_ca(l)   * ex_dhdt_surf(l)
+            ex_flux_lw(l)   = ex_flux_lw(l) - ex_dt_t_surf(l) * ex_drdt_surf(l)
+            ex_delta_t_n(l) = ex_f_t_delt_n(l)  + ex_dt_t_ca(l)*ex_e_t_n(l)
+         endif
       enddo
 
       !-----------------------------------------------------------------------
       !---- get mean quantites on atmospheric grid ----
-
+      ! TODO: get these to lm4 exports
       call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_t, 'ATM', ex_delta_t_n, xmap_sfc)
       call get_from_xgrid (Land_Ice_Atmos_Boundary%shflx,'ATM', ex_flux_t    , xmap_sfc) !miz
       call get_from_xgrid (Land_Ice_Atmos_Boundary%lhflx,'ATM', ex_flux_tr(:,isphum), xmap_sfc)!miz
 
-      !=======================================================================
-      !-------------------- diagnostics section ------------------------------
+      ! !=======================================================================
+      ! !-------------------- diagnostics section ------------------------------
 
-      !------- new surface temperature -----------
+      ! !------- new surface temperature -----------
 
-      call get_from_xgrid (diag_atm, 'ATM', ex_t_surf_new, xmap_sfc)
-      if ( id_t_surf > 0 ) then
-         used = send_data ( id_t_surf, diag_atm, Time )
-      endif
-      if ( id_ts > 0 ) then
-         used = send_data ( id_ts, diag_atm, Time )
-      endif
-      call sum_diag_integral_field ('t_surf', diag_atm)
+      ! call get_from_xgrid (diag_atm, 'ATM', ex_t_surf_new, xmap_sfc)
+      ! if ( id_t_surf > 0 ) then
+      !    used = send_data ( id_t_surf, diag_atm, Time )
+      ! endif
+      ! if ( id_ts > 0 ) then
+      !    used = send_data ( id_ts, diag_atm, Time )
+      ! endif
+      ! call sum_diag_integral_field ('t_surf', diag_atm)
 
-      if ( id_ts_g > 0 ) used = send_global_diag ( id_ts_g, diag_atm, Time )
+      ! if ( id_ts_g > 0 ) used = send_global_diag ( id_ts_g, diag_atm, Time )
 
-      !------- new surface temperature only over land and sea-ice -----------
-      if ( id_tslsi > 0 ) then
-         ex_land_frac = 0.0
-         call put_logical_to_real (Land%mask, 'LND', ex_land_frac, xmap_sfc)
-         icegrid = 1.0; icegrid(:,:,1) = 0.
-         ex_icetemp = 0.
-         call put_to_xgrid (icegrid, 'OCN', ex_icetemp, xmap_sfc)
-         ex_icetemp = ex_icetemp + ex_land_frac
-         ex_temp = ex_t_surf_new * ex_icetemp
-         call get_from_xgrid (diag_atm, 'ATM', ex_temp, xmap_sfc)
-         call get_from_xgrid (frac_atm, 'ATM', ex_icetemp, xmap_sfc)
-         where (frac_atm > 0.0)
-            diag_atm = diag_atm/frac_atm
-            frac_atm = 1.0
-         elsewhere
-            diag_atm = 0.0
-            frac_atm = 0.0
-         endwhere
-         used = send_data ( id_tslsi, diag_atm, Time, rmask=frac_atm )
-      endif
+      ! !------- new surface temperature only over land and sea-ice -----------
+      ! if ( id_tslsi > 0 ) then
+      !    ex_land_frac = 0.0
+      !    call put_logical_to_real (Land%mask, 'LND', ex_land_frac, xmap_sfc)
+      !    icegrid = 1.0; icegrid(:,:,1) = 0.
+      !    ex_icetemp = 0.
+      !    call put_to_xgrid (icegrid, 'OCN', ex_icetemp, xmap_sfc)
+      !    ex_icetemp = ex_icetemp + ex_land_frac
+      !    ex_temp = ex_t_surf_new * ex_icetemp
+      !    call get_from_xgrid (diag_atm, 'ATM', ex_temp, xmap_sfc)
+      !    call get_from_xgrid (frac_atm, 'ATM', ex_icetemp, xmap_sfc)
+      !    where (frac_atm > 0.0)
+      !       diag_atm = diag_atm/frac_atm
+      !       frac_atm = 1.0
+      !    elsewhere
+      !       diag_atm = 0.0
+      !       frac_atm = 0.0
+      !    endwhere
+      !    used = send_data ( id_tslsi, diag_atm, Time, rmask=frac_atm )
+      ! endif
 
-      ! + slm, Mar 27 2002
-      ! ------ new canopy temperature --------
-      !   NOTE, that in the particular case of LM2 t_ca is identical to t_surf,
-      !   but this will be changed in future version of the land madel
-      if ( id_t_ca > 0 ) then
-         call get_from_xgrid (diag_atm, 'ATM', ex_t_ca_new, xmap_sfc)
-         used = send_data ( id_t_ca, diag_atm, Time )
-      endif
+      ! ! + slm, Mar 27 2002
+      ! ! ------ new canopy temperature --------
+      ! !   NOTE, that in the particular case of LM2 t_ca is identical to t_surf,
+      ! !   but this will be changed in future version of the land madel
+      ! if ( id_t_ca > 0 ) then
+      !    call get_from_xgrid (diag_atm, 'ATM', ex_t_ca_new, xmap_sfc)
+      !    used = send_data ( id_t_ca, diag_atm, Time )
+      ! endif
 
-      !------- updated surface tracer fields ------
-      do tr=1,n_exch_tr
-         call get_tracer_names( MODEL_ATMOS, tr_table(tr)%atm, tr_name )
-         if ( id_tr_surf(tr) > 0 ) then
-            call get_from_xgrid (diag_atm, 'ATM', ex_tr_surf_new(:,tr), xmap_sfc)
-            used = send_data ( id_tr_surf(tr), diag_atm, Time )
-         endif
-         !!jgj:  add dryvmr co2_surf
-         ! - slm Mar 25, 2010: moved to resolve interdependence of diagnostic fields
-         if ( id_co2_surf_dvmr > 0 .and. lowercase(trim(tr_name))=='co2') then
-            ex_co2_surf_dvmr = (ex_tr_surf_new(:,tr) / (1.0 - ex_tr_surf_new(:,isphum))) * WTMAIR/WTMCO2
-            call get_from_xgrid (diag_atm, 'ATM', ex_co2_surf_dvmr, xmap_sfc)
-            used = send_data ( id_co2_surf_dvmr, diag_atm, Time )
-         endif
-      enddo
+      ! !------- updated surface tracer fields ------
+      ! do tr=1,n_exch_tr
+      !    call get_tracer_names( MODEL_ATMOS, tr_table(tr)%atm, tr_name )
+      !    if ( id_tr_surf(tr) > 0 ) then
+      !       call get_from_xgrid (diag_atm, 'ATM', ex_tr_surf_new(:,tr), xmap_sfc)
+      !       used = send_data ( id_tr_surf(tr), diag_atm, Time )
+      !    endif
+      !    !!jgj:  add dryvmr co2_surf
+      !    ! - slm Mar 25, 2010: moved to resolve interdependence of diagnostic fields
+      !    if ( id_co2_surf_dvmr > 0 .and. lowercase(trim(tr_name))=='co2') then
+      !       ex_co2_surf_dvmr = (ex_tr_surf_new(:,tr) / (1.0 - ex_tr_surf_new(:,isphum))) * WTMAIR/WTMCO2
+      !       call get_from_xgrid (diag_atm, 'ATM', ex_co2_surf_dvmr, xmap_sfc)
+      !       used = send_data ( id_co2_surf_dvmr, diag_atm, Time )
+      !    endif
+      ! enddo
 
-      !------- sensible heat flux -----------
-      if ( id_t_flux > 0 .or. id_hfss > 0 .or. id_hfss_g > 0 ) then
-         call get_from_xgrid (diag_atm, 'ATM', ex_flux_t, xmap_sfc)
-         if ( id_t_flux > 0 ) used = send_data ( id_t_flux, diag_atm, Time )
-         if ( id_hfss   > 0 ) used = send_data ( id_hfss, diag_atm, Time )
-         if ( id_hfss_g > 0 ) used = send_global_diag ( id_hfss_g, diag_atm, Time )
-      endif
+      ! !------- sensible heat flux -----------
+      ! if ( id_t_flux > 0 .or. id_hfss > 0 .or. id_hfss_g > 0 ) then
+      !    call get_from_xgrid (diag_atm, 'ATM', ex_flux_t, xmap_sfc)
+      !    if ( id_t_flux > 0 ) used = send_data ( id_t_flux, diag_atm, Time )
+      !    if ( id_hfss   > 0 ) used = send_data ( id_hfss, diag_atm, Time )
+      !    if ( id_hfss_g > 0 ) used = send_global_diag ( id_hfss_g, diag_atm, Time )
+      ! endif
 
-      !------- net longwave flux -----------
-      if ( id_r_flux > 0 .or. id_rls_g > 0 ) then
-         call get_from_xgrid (diag_atm, 'ATM', ex_flux_lw, xmap_sfc)
-         if ( id_r_flux > 0 ) used = send_data ( id_r_flux, diag_atm, Time )
-         if ( id_rls_g  > 0 ) used = send_global_diag ( id_rls_g, diag_atm, Time )
-      endif
+      ! !------- net longwave flux -----------
+      ! if ( id_r_flux > 0 .or. id_rls_g > 0 ) then
+      !    call get_from_xgrid (diag_atm, 'ATM', ex_flux_lw, xmap_sfc)
+      !    if ( id_r_flux > 0 ) used = send_data ( id_r_flux, diag_atm, Time )
+      !    if ( id_rls_g  > 0 ) used = send_global_diag ( id_rls_g, diag_atm, Time )
+      ! endif
 
 
-      !------- tracer fluxes ------------
-      ! tr_mol_flux diagnostic will be correct for co2 tracer only.
-      ! will need update code to use correct molar mass for tracers other than co2
-      do tr=1,n_exch_tr
-         if ( id_tr_flux(tr) > 0 .or. id_tr_mol_flux(tr) > 0 ) then
-            call get_from_xgrid (diag_atm, 'ATM', ex_flux_tr(:,tr), xmap_sfc)
-            call get_tracer_names( MODEL_ATMOS, tr_table(tr)%atm, tr_name, units=tr_units )
-            if (id_tr_flux(tr) > 0 ) &
-               used = send_data ( id_tr_flux(tr), diag_atm, Time )
-            !     if (id_tr_mol_flux(tr) > 0 ) &
-            !          used = send_data ( id_tr_mol_flux(tr), diag_atm*1000./WTMCO2, Time)
-            ! 2017/08/08 jgj - replaced 2 lines above by the following
-            if (id_tr_mol_flux(tr) > 0 .and. lowercase(trim(tr_name))=='co2') then
-               used = send_data ( id_tr_mol_flux(tr), diag_atm*1000./WTMCO2, Time)
-               !sometimes in 2018 f1p for vmr tracers
-            elseif (id_tr_mol_flux(tr) > 0 .and. lowercase(trim(tr_units)).eq."vmr") then
-               call get_from_xgrid (diag_atm, 'ATM', ex_flux_tr(:,tr)*(1.-ex_tr_surf_new(:,isphum)), xmap_sfc)
-               used = send_data ( id_tr_mol_flux(tr), diag_atm*1000./WTMAIR, Time)
-            endif
-         endif
-      enddo
+      ! !------- tracer fluxes ------------
+      ! ! tr_mol_flux diagnostic will be correct for co2 tracer only.
+      ! ! will need update code to use correct molar mass for tracers other than co2
+      ! do tr=1,n_exch_tr
+      !    if ( id_tr_flux(tr) > 0 .or. id_tr_mol_flux(tr) > 0 ) then
+      !       call get_from_xgrid (diag_atm, 'ATM', ex_flux_tr(:,tr), xmap_sfc)
+      !       call get_tracer_names( MODEL_ATMOS, tr_table(tr)%atm, tr_name, units=tr_units )
+      !       if (id_tr_flux(tr) > 0 ) &
+      !          used = send_data ( id_tr_flux(tr), diag_atm, Time )
+      !       !     if (id_tr_mol_flux(tr) > 0 ) &
+      !       !          used = send_data ( id_tr_mol_flux(tr), diag_atm*1000./WTMCO2, Time)
+      !       ! 2017/08/08 jgj - replaced 2 lines above by the following
+      !       if (id_tr_mol_flux(tr) > 0 .and. lowercase(trim(tr_name))=='co2') then
+      !          used = send_data ( id_tr_mol_flux(tr), diag_atm*1000./WTMCO2, Time)
+      !          !sometimes in 2018 f1p for vmr tracers
+      !       elseif (id_tr_mol_flux(tr) > 0 .and. lowercase(trim(tr_units)).eq."vmr") then
+      !          call get_from_xgrid (diag_atm, 'ATM', ex_flux_tr(:,tr)*(1.-ex_tr_surf_new(:,isphum)), xmap_sfc)
+      !          used = send_data ( id_tr_mol_flux(tr), diag_atm*1000./WTMAIR, Time)
+      !       endif
+      !    endif
+      ! enddo
 
-      if ( id_t_flux_land > 0 ) then
-         call get_from_xgrid_land (diag_land, 'LND', ex_flux_t, xmap_sfc)
-         call send_tile_data ( id_t_flux_land, diag_land )
-      endif
-      !------- tracer fluxes for land
-      do tr=1,n_exch_tr
-         if ( id_tr_flux_land(tr) > 0 .or. id_tr_mol_flux_land(tr) > 0 ) then
-            call get_tracer_names( MODEL_ATMOS, tr_table(tr)%atm, tr_name, units=tr_units )
-            call get_from_xgrid_land (diag_land, 'LND', ex_flux_tr(:,tr), xmap_sfc)
-            if (id_tr_flux_land(tr) > 0 ) &
-               call send_tile_data (id_tr_flux_land(tr), diag_land )
-            if (id_tr_mol_flux_land(tr) > 0) then
-               if (lowercase(trim(tr_name))=='co2') then
-                  call send_tile_data (id_tr_mol_flux_land(tr), diag_land*1000./WTMCO2)
-               elseif (lowercase(trim(tr_units)).eq.'vmr') then
-                  call get_from_xgrid_land (diag_land, 'LND', ex_flux_tr(:,tr)*(1.-ex_tr_surf_new(:,isphum)), xmap_sfc)
-                  call send_tile_data (id_tr_mol_flux_land(tr), diag_atm*1000./WTMAIR )
-               endif
-            endif
-         endif
-      enddo
+      ! if ( id_t_flux_land > 0 ) then
+      !    call get_from_xgrid_land (diag_land, 'LND', ex_flux_t, xmap_sfc)
+      !    call send_tile_data ( id_t_flux_land, diag_land )
+      ! endif
+      ! !------- tracer fluxes for land
+      ! do tr=1,n_exch_tr
+      !    if ( id_tr_flux_land(tr) > 0 .or. id_tr_mol_flux_land(tr) > 0 ) then
+      !       call get_tracer_names( MODEL_ATMOS, tr_table(tr)%atm, tr_name, units=tr_units )
+      !       call get_from_xgrid_land (diag_land, 'LND', ex_flux_tr(:,tr), xmap_sfc)
+      !       if (id_tr_flux_land(tr) > 0 ) &
+      !          call send_tile_data (id_tr_flux_land(tr), diag_land )
+      !       if (id_tr_mol_flux_land(tr) > 0) then
+      !          if (lowercase(trim(tr_name))=='co2') then
+      !             call send_tile_data (id_tr_mol_flux_land(tr), diag_land*1000./WTMCO2)
+      !          elseif (lowercase(trim(tr_units)).eq.'vmr') then
+      !             call get_from_xgrid_land (diag_land, 'LND', ex_flux_tr(:,tr)*(1.-ex_tr_surf_new(:,isphum)), xmap_sfc)
+      !             call send_tile_data (id_tr_mol_flux_land(tr), diag_atm*1000./WTMAIR )
+      !          endif
+      !       endif
+      !    endif
+      ! enddo
 
 
    end subroutine flux_up_to_atmos

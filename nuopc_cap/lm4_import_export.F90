@@ -468,8 +468,6 @@ contains
       character(len=*), parameter :: subname=trim(modName)//':(import_fields)'
       logical           :: first_call = .true.  ! JP TMP DEBUG
 
-      logical           :: first_call = .true.  ! JP TMP DEBUG
-
       ! ----------------------------------------------
 
       rc = ESMF_SUCCESS
