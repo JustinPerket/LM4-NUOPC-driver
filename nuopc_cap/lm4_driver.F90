@@ -70,6 +70,10 @@ module lm4_driver
       ex_u_star,    &
       ex_wind,      &
       ex_z_atm,     &
+      ex_t_surf,    &
+      ex_t_ca           
+
+   logical, allocatable, dimension(:) :: &
       ex_avail,     &   !< true where data on exchange grid are available
       ex_land           !< true if exchange grid cell is over land
 
@@ -246,12 +250,14 @@ contains
          ex_b_star(lnd%ls:lnd%le),    &
          ex_u_star(lnd%ls:lnd%le),    &
          ex_wind(lnd%ls:lnd%le),      &
-         ex_z_atm(lnd%ls:lnd%le)      &
+         ex_z_atm(lnd%ls:lnd%le),     &
+         ex_t_surf(lnd%ls:lnd%le),    &
+         ex_t_ca(lnd%ls:lnd%le)       &
          )
 
       ! these originally had a tracer dimension
       allocate( &
-         ex_tr_atm(lnd%ls:lnd%le,ntcana),  &
+         ex_tr_atm(lnd%ls:lnd%le,ntcana),      &
          ex_tr_surf(lnd%ls:lnd%le,ntcana),     & !< near-surface tracer fields
          ex_flux_tr(lnd%ls:lnd%le,ntcana),     & !< tracer fluxes
          ex_dfdtr_surf(lnd%ls:lnd%le,ntcana),  & !< d(tracer flux)/d(surf tracer)
@@ -396,8 +402,6 @@ contains
          ex_seawater       !< true if exchange grid cell is over seawater
 
       real, dimension(lnd%ls:lnd%le) :: &
-         ex_t_surf   ,  &
-         ex_t_ca     ,  &
          ex_t_surf_miz, &
          ex_p_surf   ,  &
          ex_q_surf  ,  &
@@ -533,7 +537,7 @@ contains
          ex_dfdtr_surf(:,isphum),  ex_drdt_surf,  ex_dhdt_atm, &
          ex_dfdtr_atm(:,isphum),  ex_dtaudu_atm, ex_dtaudv_atm,         &
          dt,                                                            & !! timestep doesn't seem to be used
-         ex_land, ex_seawater, ex_avail                                       & ! Is land, Is seawater, Is ex. avail
+         ex_land, ex_seawater, ex_avail                                 & ! Is land, Is seawater, Is ex. avail
          )
 
       ex_q_surf(1) = ex_tr_surf(1,isphum)  ! TODO: review this connection
@@ -895,7 +899,17 @@ contains
 
       real, dimension(lnd%ls:lnd%le) :: &
          ex_t_surf_new, &
-         ex_t_ca_new    
+         ex_dt_t_surf,  &
+         ex_delta_t_n,  &         
+         ex_t_ca_new,   &    
+         ex_dt_t_ca
+
+      real, dimension(lnd%ls:lnd%le,ntcana) ::  &
+         ex_tr_surf_new,    & ! updated tracer values at the surface
+         ex_dt_tr_surf,     & ! tendency of tracers at the surface
+         ex_delta_tr_n
+
+      integer :: l, tr 
 
       !----- compute surface temperature change ----- 
 
@@ -904,8 +918,8 @@ contains
       ex_t_ca_new = ex_t_surf_new  ! since it is the same thing over oceans
       ! call put_to_xgrid_land (Land%t_ca,   'LND', ex_t_ca_new,   xmap_sfc)
       ! call put_to_xgrid_land (Land%t_surf, 'LND', ex_t_surf_new, xmap_sfc)
-      ex_t_surf = lm4_model%From_lnd%t_surf(:,ntile)
-      ex_t_ca   = lm4_model%From_lnd%t_ca(:,ntile)
+      ex_t_surf_new = lm4_model%From_lnd%t_surf(:,ntile)
+      ex_t_ca_new   = lm4_model%From_lnd%t_ca(:,ntile)
 
       do l = lnd%ls,lnd%le
          if(ex_avail(l)) then
@@ -1355,7 +1369,10 @@ contains
          ex_wind,      &
          ex_z_atm,     &
          ex_avail,     & 
-         ex_land       )
+         ex_land,      &
+         ex_t_surf,    &
+         ex_t_ca       &
+              )
 
 
    end subroutine end_driver
