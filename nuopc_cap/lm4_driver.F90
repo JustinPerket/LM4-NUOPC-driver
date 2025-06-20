@@ -71,13 +71,15 @@ module lm4_driver
 
    ! these originally had a tracer dimension
    real, allocatable, dimension(:,:) :: &
-      ex_tr_atm,     &
-      ex_tr_surf,    & !< near-surface tracer fields
-      ex_flux_tr,    & !< tracer fluxes
-      ex_dfdtr_surf, & !< d(tracer flux)/d(surf tracer)
-      ex_dfdtr_atm,  & !< d(tracer flux)/d(atm tracer)
-      ex_e_tr_n,     & !< coefficient in implicit scheme
-      ex_f_tr_delt_n   !< coefficient in implicit scheme
+      ex_tr_atm,      &
+      ex_tr_surf,     & !< near-surface tracer fields
+      ex_flux_tr,     & !< tracer fluxes
+      ex_dfdtr_surf,  & !< d(tracer flux)/d(surf tracer)
+      ex_dfdtr_atm,   & !< d(tracer flux)/d(atm tracer)
+      ex_e_tr_n,      & !< coefficient in implicit scheme
+      ex_f_tr_delt_n, & !< coefficient in implicit scheme
+      ex_avail,       & !< true where data on exchange grid are available
+      ex_land           !< true if exchange grid cell is over land
 
 
    !integer :: n_exch_tr !< number of tracers exchanged between models
@@ -247,14 +249,19 @@ contains
       ! these originally had a tracer dimension
       allocate( &
          ex_tr_atm(lnd%ls:lnd%le,ntcana),  &
-         ex_tr_surf(lnd%ls:lnd%le,ntcana),    & !< near-surface tracer fields
-         ex_flux_tr(lnd%ls:lnd%le,ntcana),    & !< tracer fluxes
-         ex_dfdtr_surf(lnd%ls:lnd%le,ntcana), & !< d(tracer flux)/d(surf tracer)
-         ex_dfdtr_atm(lnd%ls:lnd%le,ntcana),  & !< d(tracer flux)/d(atm tracer)
-         ex_e_tr_n(lnd%ls:lnd%le,ntcana),     & !< coefficient in implicit scheme
-         ex_f_tr_delt_n(lnd%ls:lnd%le,ntcana) &  !< coefficient in implicit scheme
-
+         ex_tr_surf(lnd%ls:lnd%le,ntcana),     & !< near-surface tracer fields
+         ex_flux_tr(lnd%ls:lnd%le,ntcana),     & !< tracer fluxes
+         ex_dfdtr_surf(lnd%ls:lnd%le,ntcana),  & !< d(tracer flux)/d(surf tracer)
+         ex_dfdtr_atm(lnd%ls:lnd%le,ntcana),   & !< d(tracer flux)/d(atm tracer)
+         ex_e_tr_n(lnd%ls:lnd%le,ntcana),      & !< coefficient in implicit scheme
+         ex_f_tr_delt_n(lnd%ls:lnd%le,ntcana), & !< coefficient in implicit scheme
+         ex_avail(lnd%ls:lnd%le),              & !< true where data on exchange grid are available
+         ex_land(lnd%ls:lnd%le)                  !< true if exchange grid cell is over land
          )
+
+      ! initialize ex_avail and ex_land
+      ex_avail    = .TRUE.
+      ex_land     = .TRUE.
 
       ! Set restart time
       if (ALL(lm4_model%nml%restart_interval ==0)) then
@@ -383,8 +390,6 @@ contains
       !!
 
       logical, dimension(lnd%ls:lnd%le) :: &
-         ex_avail,     &   !< true where data on exchange grid are available
-         ex_land,      &   !< true if exchange grid cell is over land
          ex_seawater       !< true if exchange grid cell is over seawater
 
       real, dimension(lnd%ls:lnd%le) :: &
@@ -421,9 +426,6 @@ contains
 
 
       ! ---------------------------
-
-      ex_avail    = .TRUE.
-      ex_land     = .TRUE.
       ex_seawater = .FALSE.
 
       ! these are 0 for land
@@ -898,9 +900,8 @@ contains
 
       !----- compute surface temperature change ----- 
 
-      ex_t_surf_new = 200.0
+      ex_t_surf_new = 200.0 !TODO: need this?
 
-      ! call put_to_xgrid (Ice%t_surf,  'OCN', ex_t_surf_new, xmap_sfc)  ! JP: ignore ocean
       ex_t_ca_new = ex_t_surf_new  ! since it is the same thing over oceans
       ! call put_to_xgrid_land (Land%t_ca,   'LND', ex_t_ca_new,   xmap_sfc)
       ! call put_to_xgrid_land (Land%t_surf, 'LND', ex_t_surf_new, xmap_sfc)
@@ -1363,7 +1364,9 @@ contains
          ex_b_star,    &
          ex_u_star,    &
          ex_wind,      &
-         ex_z_atm               )
+         ex_z_atm,     &
+         ex_avail,     & 
+         ex_land       )
 
 
    end subroutine end_driver
