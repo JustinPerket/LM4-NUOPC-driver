@@ -888,20 +888,24 @@ contains
    !! Final increments for temperature and specific humidity in the
    !! lowest atmospheric layer are computed to be returned to the atmospheric model
    !! ============================================================================
-   subroutine  flux_up_to_atmos( Land )
+   subroutine  flux_up_to_atmos( lm4_model )
 
       type(land_data_type),  intent(in)    :: Land !< A derived data type to specify land boundary data
 
       real, allocatable, dimension(:) :: &
          ex_t_surf_new, &
+         ex_t_ca_new   &
 
-         ex_t_surf_new = 200.0
+      !----- compute surface temperature change ----- 
 
-      call put_to_xgrid (Ice%t_surf,  'OCN', ex_t_surf_new, xmap_sfc)
+      ex_t_surf_new = 200.0
+
+      ! call put_to_xgrid (Ice%t_surf,  'OCN', ex_t_surf_new, xmap_sfc)  ! JP: ignore ocean
       ex_t_ca_new = ex_t_surf_new  ! since it is the same thing over oceans
-      call put_to_xgrid_land (Land%t_ca,   'LND', ex_t_ca_new,   xmap_sfc)
-      call put_to_xgrid_land (Land%t_surf, 'LND', ex_t_surf_new, xmap_sfc)
-
+      ! call put_to_xgrid_land (Land%t_ca,   'LND', ex_t_ca_new,   xmap_sfc)
+      ! call put_to_xgrid_land (Land%t_surf, 'LND', ex_t_surf_new, xmap_sfc)
+      ex_t_surf = lm4_model%From_lnd%t_surf(:,ntile)
+      ex_t_ca   = lm4_model%From_lnd%t_ca(:,ntile)
 
       do l = 1, my_nblocks
          is=block_start(l)
