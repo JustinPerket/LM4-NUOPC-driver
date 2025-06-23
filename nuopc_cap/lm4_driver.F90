@@ -998,7 +998,10 @@ contains
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%lhflx,'ATM', ex_flux_tr(:,isphum), xmap_sfc)!miz
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr, 'ATM', ex_delta_tr_n, xmap_sfc)      
       lm4_model%atm_sfc%shflx = ex_flux_t
-      lm4_model%atm_sfc%lhflx = ex_flux_tr(:,isphum) 
+      lm4_model%atm_sfc%lhflx = ex_flux_tr(:,isphum)
+      
+      ! not originally to flux_up_to_atmos, but needed by ufs atm
+      lm4_model%atm_sfc%q_surf = ex_tr_surf(:,isphum)  ! TODO: review if this is correct 
 
       ! !=======================================================================
       ! !-------------------- diagnostics section ------------------------------

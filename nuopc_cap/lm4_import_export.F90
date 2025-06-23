@@ -651,22 +651,27 @@ contains
       call state_setexport_2d(exportState, 'Sl_lfrin', lm4data_2d=lnd%sg_landfrac,rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-      !JP TMP fill export fields used by noah
       if (send_to_atm) then     
          call state_setexport_2d(exportState, 'Fall_lat',  lm4data_1d=lm4_model%atm_sfc%lhflx, rc=rc)
          call state_setexport_2d(exportState, 'Fall_sen',  lm4data_1d=lm4_model%atm_sfc%shflx,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_evap', lm4data_2d=0.000001+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_tref',   lm4data_2d=300.0+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_qref',   lm4data_2d=0.0003*+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_q',      lm4data_2d=0.0003*+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_gflx', lm4data_2d=0.0001+0*lnd%sg_landfrac,rc=rc)
+
+         call state_setexport_2d(exportState, 'Sl_q',      lm4data_1d=lm4_model%atm_sfc%q_surf,rc=rc)
+
+         !JP TMP fill export fields used by noah
+         ! call state_setexport_2d(exportState, 'Sl_cmm',    lm4data_2d=0.032+0.0*lnd%sg_landfrac,rc=rc)
+         ! call state_setexport_2d(exportState, 'Sl_chh',    lm4data_2d=0.017+0.0*lnd%sg_landfrac,rc=rc)
+         ! call state_setexport_2d(exportState, 'Sl_zvfun',  lm4data_2d=0.340+0.0*lnd%sg_landfrac,rc=rc)
+
+         !! These seem to only be needed by UFS atm for diagnostics
+         ! call state_setexport_2d(exportState, 'Fall_evap', lm4data_2d=0.000001+0.0*lnd%sg_landfrac,rc=rc)
+         ! call state_setexport_2d(exportState, 'Sl_tref',   lm4data_2d=300.0+0.0*lnd%sg_landfrac,rc=rc)
+         ! call state_setexport_2d(exportState, 'Sl_qref',   lm4data_2d=0.0003*+0.0*lnd%sg_landfrac,rc=rc)  
+         !! These don't seem to be needed by UFS atm, even for diagnostics       
          ! call state_setexport_2d(exportState, 'Fall_roff', lm4data_2d=0.0*lnd%sg_landfrac,rc=rc)
-         ! call state_setexport_2d(exportState, 'Fall_soff', lm4data_2d=0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_cmm',    lm4data_2d=0.032+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_chh',    lm4data_2d=0.017+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_zvfun',  lm4data_2d=0.340+0.0*lnd%sg_landfrac,rc=rc)
+         ! call state_setexport_2d(exportState, 'Fall_soff', lm4data_2d=0.0*lnd%sg_landfrac,rc=rc)     
+         ! call state_setexport_2d(exportState, 'Fall_gflx', lm4data_2d=0.0001+0*lnd%sg_landfrac,rc=rc)
+         !JP END
       end if
-      !JP END
 
    end subroutine export_fields
 

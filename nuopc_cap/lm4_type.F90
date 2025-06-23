@@ -68,7 +68,8 @@ module lm4_type_mod
       real, pointer, dimension(:) ::  &
          ! dt_t      => NULL(), &
          shflx     => NULL(), &   ! sensible heat flux, W/m2   
-         lhflx     => NULL()      ! latent heat flux, W/m2
+         lhflx     => NULL(), &   ! latent heat flux, W/m2
+         q_surf   => NULL()       ! specific humidity at the surface, kg/kg
    end type atm_sfc_type
 
    ! TMP DEBUG
@@ -130,8 +131,9 @@ contains
 
       type(atm_sfc_type), intent(inout) :: bnd
 
-      if (associated(bnd%shflx)) deallocate(bnd%shflx)
-      if (associated(bnd%lhflx)) deallocate(bnd%lhflx)
+      if (associated(bnd%shflx))  deallocate(bnd%shflx)
+      if (associated(bnd%lhflx))  deallocate(bnd%lhflx)
+      if (associated(bnd%q_surf)) deallocate(bnd%q_surf)
       !if (associated(bnd%dt_t)) deallocate(bnd%dt_t)
 
    end subroutine dealloc_atmsfc
@@ -147,6 +149,7 @@ contains
 
       allocate( bnd%shflx(lnd%ls:lnd%le) )
       allocate( bnd%lhflx(lnd%ls:lnd%le) )
+      allocate( bnd%q_surf(lnd%ls:lnd%le) )
       !allocate( bnd%dt_t(lnd%ls:lnd%le) )
 
    end subroutine alloc_atmsfc
