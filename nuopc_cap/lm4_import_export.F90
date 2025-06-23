@@ -648,23 +648,23 @@ contains
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
       ! export to mediator
-      call state_setexport_2d(exportState, 'Sl_lfrin', lnd%sg_landfrac,rc=rc)
+      call state_setexport_2d(exportState, 'Sl_lfrin', lm4data_2d=lnd%sg_landfrac,rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
       !JP TMP fill export fields used by noah
       if (send_to_atm) then     
          call state_setexport_2d(exportState, 'Fall_lat',  lm4data_1d=lm4_model%atm_sfc%lhflx, rc=rc)
          call state_setexport_2d(exportState, 'Fall_sen',  lm4data_1d=lm4_model%atm_sfc%shflx,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_evap', 0.000001+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_tref',   300.0+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_qref',   0.0003*+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_q',      0.0003*+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_gflx', 0.0001+0*lnd%sg_landfrac,rc=rc)
-         ! call state_setexport_2d(exportState, 'Fall_roff', 0.0*lnd%sg_landfrac,rc=rc)
-         ! call state_setexport_2d(exportState, 'Fall_soff', 0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_cmm',    0.032+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_chh',    0.017+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Sl_zvfun',  0.340+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_evap', lm4data_2d=0.000001+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_tref',   lm4data_2d=300.0+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_qref',   lm4data_2d=0.0003*+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_q',      lm4data_2d=0.0003*+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_gflx', lm4data_2d=0.0001+0*lnd%sg_landfrac,rc=rc)
+         ! call state_setexport_2d(exportState, 'Fall_roff', lm4data_2d=0.0*lnd%sg_landfrac,rc=rc)
+         ! call state_setexport_2d(exportState, 'Fall_soff', lm4data_2d=0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_cmm',    lm4data_2d=0.032+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_chh',    lm4data_2d=0.017+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Sl_zvfun',  lm4data_2d=0.340+0.0*lnd%sg_landfrac,rc=rc)
       end if
       !JP END
 
@@ -773,18 +773,22 @@ contains
 
       ! local variables
       real(r8), pointer :: fldPtr2d(:,:)
+      type(ESMF_StateItem_Flag)   :: itemType
       character(len=*), parameter :: subname='(lnd_export_export:state_setexport_2d)'
       ! ----------------------------------------------
 
 
-      call state_getfldptr(state, trim(fldname), fldptr2d=fldptr2d, rc=rc)
+      call ESMF_StateGet(state, itemName=trim(fldname), itemType=itemType, rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
+      
       if (itemType == ESMF_STATEITEM_FIELD) then
+
+         call state_getfldptr(state, trim(fldname), fldptr2d=fldptr2d, rc=rc)
+         if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
          ! pass structured grid data to structured grid
          if (present(lm4data_2d)) then
-            lm4data_2d(:,:) = fldptr2d(:,:)
+            fldptr2d(:,:) = lm4data_2d(:,:)
          end if
 
          ! pass unstructured grid data to structured grid

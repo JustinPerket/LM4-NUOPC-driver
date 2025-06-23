@@ -37,7 +37,7 @@ module lm4_driver
 
    public :: lm4_nml_read
    public :: init_driver, end_driver
-   public :: sfc_boundary_layer, update_atmos_model_down, flux_down_from_atmos
+   public :: sfc_boundary_layer, update_atmos_model_down, flux_down_from_atmos, flux_up_to_atmos
    public :: write_int_restart
    public :: debug_diag
 
