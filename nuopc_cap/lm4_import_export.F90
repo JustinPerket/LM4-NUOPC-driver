@@ -19,7 +19,7 @@ module lm4_import_export
    use land_data_mod,            only: lnd ! global data
    use land_data_mod,            only: land_data_type, atmos_land_boundary_type
    use nuopc_lm4_methods,        only: chkerr
-   use mpp_domains_mod,          only : mpp_pass_sg_to_ug
+   use mpp_domains_mod,          only: mpp_pass_sg_to_ug, mpp_pass_ug_to_sg
 
    implicit none
    private ! except
@@ -642,11 +642,11 @@ contains
    end subroutine correct_import_fields
 
    !===============================================================================
-   subroutine export_fields(gcomp, rc)
+   subroutine export_fields(gcomp, lm4_model, rc)
 
       ! input/output variables
       type(ESMF_GridComp),              intent(in)    :: gcomp
-      !type(lm4_type),                   intent(in)    :: lm4_model
+      type(lm4_type),                   intent(in)    :: lm4_model
       integer,                          intent(out)   :: rc
 
       ! local variables
@@ -667,8 +667,8 @@ contains
 
       !JP TMP fill export fields used by noah
       if (send_to_atm) then     
-         call state_setexport_2d(exportState, 'Fall_lat',  0.000001+0.0*lnd%sg_landfrac,rc=rc)
-         call state_setexport_2d(exportState, 'Fall_sen',  0.000001+0.0*lnd%sg_landfrac,rc=rc)
+         call state_setexport_2d(exportState, 'Fall_lat',  lm4data_1d=lm4_model%atm_sfc%lhflx, rc=rc)
+         call state_setexport_2d(exportState, 'Fall_sen',  lm4data_1d=lm4_model%atm_sfc%shflx,rc=rc)
          call state_setexport_2d(exportState, 'Fall_evap', 0.000001+0.0*lnd%sg_landfrac,rc=rc)
          call state_setexport_2d(exportState, 'Sl_tref',   300.0+0.0*lnd%sg_landfrac,rc=rc)
          call state_setexport_2d(exportState, 'Sl_qref',   0.0003*+0.0*lnd%sg_landfrac,rc=rc)
@@ -791,7 +791,7 @@ contains
    end subroutine state_getimport_2d
 
    !===============================================================================
-   subroutine state_setexport_2d(state, fldname, lm4data, minus, rc)
+   subroutine state_setexport_2d(state, fldname, lm4data_1d, lm4data_2d, rc)
       ! fill in lm4 export data for 2d field (ie, structured grid)
       use ESMF, only : ESMF_LOGERR_PASSTHRU, ESMF_END_ABORT, ESMF_LogFoundError
       use ESMF, only : ESMF_Finalize
@@ -799,8 +799,8 @@ contains
       ! input/output variabes
       type(ESMF_State) , intent(in)  :: state
       character(len=*) , intent(in)  :: fldname
-      real(r8)         , intent(in)  :: lm4data(:,:)
-      logical, optional, intent(in)  :: minus
+      real(r8), optional, intent(in) :: lm4data_1d(:)      ! 1d, Unstructured Grid input
+      real(r8), optional, intent(in) :: lm4data_2d(:,:)    ! 2d, Structured Grid input      
       integer          , intent(out) :: rc
 
       ! local variables
@@ -812,10 +812,18 @@ contains
       call state_getfldptr(state, trim(fldname), fldptr2d=fldptr2d, rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-      if (present(minus)) then
-         fldptr2d(:,:) = -lm4data(:,:)
-      else
-         fldptr2d(:,:) = lm4data(:,:)
+      if (itemType == ESMF_STATEITEM_FIELD) then
+
+         ! pass structured grid data to structured grid
+         if (present(lm4data_2d)) then
+            lm4data_2d(:,:) = fldptr2d(:,:)
+         end if
+
+         ! pass unstructured grid data to structured grid
+         if (present(lm4data_1d)) then
+            call mpp_pass_ug_to_sg(lnd%ug_domain, lm4data_1d, fldptr2d)
+         end if
+
       end if
 
    end subroutine state_setexport_2d

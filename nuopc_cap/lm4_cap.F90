@@ -16,7 +16,8 @@ module lm4_cap_mod
    use NUOPC_Model,          only: NUOPC_ModelGet
 
    use lm4_kind_mod,         only: r8 => shr_kind_r8, cl=>shr_kind_cl
-   use lm4_type_mod,         only: lm4_type, alloc_atmforc, dealloc_atmforc
+   use lm4_type_mod,         only: lm4_type, alloc_atmforc, dealloc_atmforc, &
+                                   alloc_atmsfc, dealloc_atmsfc
    use lm4_type_mod,         only: alloc_atmforc2d, dealloc_atmforc2d ! TMP DEBUG
 
    use nuopc_lm4_methods,    only: chkerr
@@ -330,11 +331,12 @@ contains
 
       call ESMF_LogWrite('======== COMPLETED land_model_init ==========', ESMF_LOGMSG_INFO)
 
-      ! allocate storage for the atm forc data
+      ! allocate storage for data to/from nuopc-cap atm
       call alloc_atmforc(lm4_model%atm_forc)
       if (debug_cap > 0) then
          call alloc_atmforc2d(lm4_model%atm_forc2d) ! TMP DEBUG
       endif
+      call alloc_atmsfc(lm4_model%atm_sfc)
 
       !----------------------------------------------------------------------------
       ! advertise fields
@@ -614,11 +616,12 @@ contains
       call fms_io_exit  ! TEST
       call fms_end      ! TEST
 
-      ! deallocate storage for the atm forc data
+      ! deallocate storage for data to/from nuopc-cap atm
       call dealloc_atmforc(lm4_model%atm_forc)
       if (debug_cap > 0) then
          call dealloc_atmforc2d(lm4_model%atm_forc2d) ! TMP DEBUG
       endif
+      call dealloc_atmsfc(lm4_model%atm_sfc)
 
       call ESMF_LogWrite(subname//' finished', ESMF_LOGMSG_INFO)
 

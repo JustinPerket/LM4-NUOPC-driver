@@ -63,15 +63,17 @@ module lm4_driver
       ex_flux_t, ex_flux_lw,      &
       ex_dhdt_surf, ex_dedt_surf, &
       ex_drdt_surf,  ex_dhdt_atm, &
-      ex_drag_q,    &   !< q drag.coeff.
-      ex_cd_t,      &
-      ex_cd_m,      &
-      ex_b_star,    &
-      ex_u_star,    &
-      ex_wind,      &
-      ex_z_atm,     &
-      ex_t_surf,    &
-      ex_t_ca           
+      ex_drag_q,     &   !< q drag.coeff.
+      ex_cd_t,       &
+      ex_cd_m,       &
+      ex_b_star,     &
+      ex_u_star,     &
+      ex_wind,       &
+      ex_z_atm,      &
+      ex_t_surf,     &
+      ex_t_ca,       &
+      ex_f_t_delt_n, &   
+      ex_e_t_n        
 
    logical, allocatable, dimension(:) :: &
       ex_avail,     &   !< true where data on exchange grid are available
@@ -244,15 +246,17 @@ contains
          ex_flux_t(lnd%ls:lnd%le), ex_flux_lw(lnd%ls:lnd%le),   &
          ex_dhdt_surf(lnd%ls:lnd%le), ex_dedt_surf(lnd%ls:lnd%le), &
          ex_drdt_surf(lnd%ls:lnd%le),  ex_dhdt_atm(lnd%ls:lnd%le), &
-         ex_drag_q(lnd%ls:lnd%le),    &   !< q drag.coeff.
-         ex_cd_t(lnd%ls:lnd%le),      &
-         ex_cd_m(lnd%ls:lnd%le),      &
-         ex_b_star(lnd%ls:lnd%le),    &
-         ex_u_star(lnd%ls:lnd%le),    &
-         ex_wind(lnd%ls:lnd%le),      &
-         ex_z_atm(lnd%ls:lnd%le),     &
-         ex_t_surf(lnd%ls:lnd%le),    &
-         ex_t_ca(lnd%ls:lnd%le)       &
+         ex_drag_q(lnd%ls:lnd%le),     &   !< q drag.coeff.
+         ex_cd_t(lnd%ls:lnd%le),       &
+         ex_cd_m(lnd%ls:lnd%le),       &
+         ex_b_star(lnd%ls:lnd%le),     &
+         ex_u_star(lnd%ls:lnd%le),     &
+         ex_wind(lnd%ls:lnd%le),       &
+         ex_z_atm(lnd%ls:lnd%le),      &
+         ex_t_surf(lnd%ls:lnd%le),     &
+         ex_t_ca(lnd%ls:lnd%le),       &
+         ex_f_t_delt_n(lnd%ls:lnd%le), &   
+         ex_e_t_n(lnd%ls:lnd%le)       &        
          )
 
       ! these originally had a tracer dimension
@@ -407,7 +411,6 @@ contains
          ex_q_surf  ,  &
       !ex_slp      ,  &
          ex_dqsatdt_surf,  &
-         ex_f_t_delt_n, &
 
       ! MOD these were moved from local ! so they can be passed to flux down
          ex_flux_u,    &
@@ -417,7 +420,6 @@ contains
 
       ! values added for LM3
 
-         ex_e_t_n    ,  &
       !ex_e_q_n    ,  &
 
       !
@@ -758,7 +760,7 @@ contains
          ex_flux_sw_vis_dir, &
          ex_flux_sw_vis_dif, &
       ! ex_tprec, & ! temperature of precipitation, currently equal to atm T
-         ex_dtmass, ex_gamma, ex_e_t_n, ex_f_t_delt_n, &
+         ex_dtmass, ex_gamma, &
          ex_delta_t, ex_dflux_t, ex_e_q_n
 
       real, dimension(lnd%ls:lnd%le,ntcana) ::  &
@@ -991,10 +993,12 @@ contains
 
       !-----------------------------------------------------------------------
       !---- get mean quantites on atmospheric grid ----
-      ! TODO: get these to lm4 exports
-      call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_t, 'ATM', ex_delta_t_n, xmap_sfc)
-      call get_from_xgrid (Land_Ice_Atmos_Boundary%shflx,'ATM', ex_flux_t    , xmap_sfc) !miz
-      call get_from_xgrid (Land_Ice_Atmos_Boundary%lhflx,'ATM', ex_flux_tr(:,isphum), xmap_sfc)!miz
+      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_t, 'ATM', ex_delta_t_n, xmap_sfc)
+      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%shflx,'ATM', ex_flux_t    , xmap_sfc) !miz
+      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%lhflx,'ATM', ex_flux_tr(:,isphum), xmap_sfc)!miz
+      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr, 'ATM', ex_delta_tr_n, xmap_sfc)      
+      lm4_model%atm_sfc%shflx = ex_flux_t
+      lm4_model%atm_sfc%lhflx = ex_flux_tr(:,isphum) 
 
       ! !=======================================================================
       ! !-------------------- diagnostics section ------------------------------
@@ -1361,17 +1365,19 @@ contains
          ex_drdt_surf, ex_dhdt_atm, ex_tr_atm, ex_tr_surf, &
          ex_flux_tr, ex_dfdtr_surf, ex_dfdtr_atm, ex_e_tr_n, &
          ex_f_tr_delt_n, &
-         ex_drag_q,    &
-         ex_cd_t,      &
-         ex_cd_m,      &
-         ex_b_star,    &
-         ex_u_star,    &
-         ex_wind,      &
-         ex_z_atm,     &
-         ex_avail,     & 
-         ex_land,      &
-         ex_t_surf,    &
-         ex_t_ca       &
+         ex_drag_q,     &
+         ex_cd_t,       &
+         ex_cd_m,       &
+         ex_b_star,     &
+         ex_u_star,     &
+         ex_wind,       &
+         ex_z_atm,      &
+         ex_avail,      & 
+         ex_land,       &
+         ex_t_surf,     &
+         ex_t_ca,       &
+         ex_f_t_delt_n, &   
+         ex_e_t_n       &             
               )
 
 
