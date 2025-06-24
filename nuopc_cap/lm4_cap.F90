@@ -526,10 +526,9 @@ contains
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
 
-      ! option to write out diag history of imports
-      ! if (debug_cap > 0) then
-      !    call debug_diag(lm4_model)
-      ! endif
+      !-------------------------------------------------------------------------------
+      ! Run fast LM4 calls
+      !-------------------------------------------------------------------------------
 
       ! TODO, is sec being used anywhere?
       call get_time (lm4_model%Time_step_land, sec)        ! get seconds of timestep
@@ -561,13 +560,22 @@ contains
       ! write(logmsg,*) time_sec
       ! call ESMF_LogWrite(trim(subname)//'LM4 driver currSimTime: '//trim(logmsg), ESMF_LOGMSG_INFO)
       
-      ! quick way to only call on slow timestep, replicates behavior in FMS coupler
+      !-------------------------------------------------------------------------------
+      ! Run slow timescale LM4 calls
+      !-------------------------------------------------------------------------------         
+      ! replicates behavior in FMS coupler
       if ( mod(time_sec+timestep_sec ,lm4_model%nml%dt_lnd_slow) == 0 ) then
          call update_land_model_slow(lm4_model%From_atm,lm4_model%From_lnd)
          call ESMF_LogWrite(trim(subname)//'LM4 update_land_model_slow called', ESMF_LOGMSG_INFO)
          
          call write_int_restart(lm4_model)
       endif
+
+      !-------------------------------------------------------------------------------
+      ! Send export fields
+      !-------------------------------------------------------------------------------      
+      call export_fields(gcomp, lm4_model, rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return      
 
       call ESMF_LogWrite(subname//' finished', ESMF_LOGMSG_INFO)
 
