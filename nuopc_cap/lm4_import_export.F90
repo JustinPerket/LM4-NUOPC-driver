@@ -791,6 +791,8 @@ contains
          call state_getfldptr(state, trim(fldname), fldptr2d=fldptr2d, rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+         fldptr2d = 0.0_r8 
+
          ! pass structured grid data to structured grid
          if (present(lm4data_2d)) then
             fldptr2d(:,:) = lm4data_2d(:,:)
