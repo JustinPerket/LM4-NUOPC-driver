@@ -11,7 +11,7 @@ module lm4_driver
    use lm4_kind_mod,         only: r8 => shr_kind_r8, cl=>shr_kind_cl
    use land_data_mod,        only: land_data_type, atmos_land_boundary_type, lnd
    use land_tracers_mod,     only: isphum, ico2, ntcana
-   use lm4_surface_flux_mod, only: lm4_surface_flux_1d
+   use lm4_surface_flux_mod, only: lm4_surface_flux_1d, virtual_temp, air_density
 
    use time_manager_mod,      only: time_type, date_to_string, increment_date, decrement_date
    use time_manager_mod,      only: operator(>=), operator(<), operator(==)
@@ -272,6 +272,35 @@ contains
          ex_land(lnd%ls:lnd%le)                & !< true if exchange grid cell is over land
          )
 
+      ! initialize reals
+      ex_flux_t     = 0.0_r8
+      ex_flux_lw    = 0.0_r8
+      ex_dhdt_surf  = 0.0_r8
+      ex_dedt_surf  = 0.0_r8
+      ex_drdt_surf  = 0.0_r8
+      ex_dhdt_atm   = 0.0_r8
+      ex_drag_q     = 0.0_r8
+      ex_cd_t       = 0.0_r8
+      ex_cd_m       = 0.0_r8
+      ex_b_star     = 0.0_r8
+      ex_u_star     = 0.0_r8
+      ex_wind       = 0.0_r8
+      ex_z_atm      = 0.0_r8
+      ex_t_surf     = 0.0_r8
+      ex_t_ca       = 0.0_r8
+      ex_f_t_delt_n = 0.0_r8
+      ex_e_t_n      = 0.0_r8
+
+      ex_tr_atm      = 0.0_r8
+      ex_tr_surf     = 0.0_r8
+      ex_flux_tr     = 0.0_r8
+      ex_dfdtr_surf  = 0.0_r8
+      ex_dfdtr_atm   = 0.0_r8
+      ex_e_tr_n      = 0.0_r8
+      ex_f_tr_delt_n = 0.0_r8
+      ex_avail       = 0.0_r8
+      ex_land        = 0.0_r8
+
       ! initialize ex_avail and ex_land
       ex_avail    = .TRUE.
       ex_land     = .TRUE.
@@ -317,7 +346,7 @@ contains
          call compute_gust(lm4_model)
       endif
 
-   end subroutine init_driver
+         end subroutine init_driver
 
    !! ============================================================================
    !! Adapted from GFDL coupler, write intermediate restarts
@@ -897,6 +926,7 @@ contains
    !! ============================================================================
    subroutine  flux_up_to_atmos( lm4_model )
 
+      use constants_mod, only : hlv, cp_air
       type(lm4_type),        intent(inout)  :: lm4_model ! land model's variable type
 
       real, dimension(lnd%ls:lnd%le) :: &
@@ -904,7 +934,8 @@ contains
          ex_dt_t_surf,  &
          ex_delta_t_n,  &         
          ex_t_ca_new,   &    
-         ex_dt_t_ca
+         ex_dt_t_ca,    &
+         rho               ! air density
 
       real, dimension(lnd%ls:lnd%le,ntcana) ::  &
          ex_tr_surf_new,    & ! updated tracer values at the surface
@@ -912,6 +943,8 @@ contains
          ex_delta_tr_n
 
       integer :: l, tr 
+
+      
 
       !----- compute surface temperature change ----- 
 
@@ -996,12 +1029,25 @@ contains
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_t, 'ATM', ex_delta_t_n, xmap_sfc)
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%shflx,'ATM', ex_flux_t    , xmap_sfc) !miz
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%lhflx,'ATM', ex_flux_tr(:,isphum), xmap_sfc)!miz
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr, 'ATM', ex_delta_tr_n, xmap_sfc)      
-      lm4_model%atm_sfc%shflx = ex_flux_t
-      lm4_model%atm_sfc%lhflx = ex_flux_tr(:,isphum)
+      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr, 'ATM', ex_delta_tr_n, xmap_sfc)  
       
+      !! TODO: should be using updated t_ca, q_ca, t_surf here! check pressure too
+
       ! not originally to flux_up_to_atmos, but needed by ufs atm
-      lm4_model%atm_sfc%q_surf = ex_tr_surf(:,isphum)  ! TODO: review if this is correct 
+      lm4_model%atm_sfc%q_surf = ex_tr_surf_new(:,isphum)  ! TODO: review if this is correct 
+
+      ! NEED TO CONVERT UNITS
+      rho = virtual_temp(ex_t_ca_new, ex_tr_surf_new(:,isphum))
+      rho = air_density(lm4_model%atm_forc%p_surf, rho)
+
+      ! TMP print rho
+      if (mpp_pe()== mpp_root_pe() ) then
+         write(*,*) 'JP DEBUG: rho in flux_up_to_atmos', rho
+      endif
+
+      lm4_model%atm_sfc%shflx = ex_flux_t/(rho*cp_air)  ! SH/(rho*c_p)
+      lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)/(rho*hlv)  ! LH/(rho*h_vap)
+
 
       ! !=======================================================================
       ! !-------------------- diagnostics section ------------------------------
