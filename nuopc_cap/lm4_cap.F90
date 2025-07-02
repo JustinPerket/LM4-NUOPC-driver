@@ -208,14 +208,16 @@ contains
 
       ! if lm4_model%nml%lm4_debug is set, and > 0, write out namelist variables read in 
       if (mype == 0 .and. debug_cap > 0) then
-         write(*,*) 'lm4_model%nml%lm4_debug: ' ,lm4_model%nml%lm4_debug
-         write(*,*) 'lm4_model%nml%grid: '      ,lm4_model%nml%grid
-         write(*,*) 'lm4_model%nml%npx: '       ,lm4_model%nml%npx
-         write(*,*) 'lm4_model%nml%npy: '       ,lm4_model%nml%npy
-         write(*,*) 'lm4_model%nml%layout: '    ,lm4_model%nml%layout
-         write(*,*) 'lm4_model%nml%ntiles: '    ,lm4_model%nml%ntiles
-         write(*,*) 'lm4_model%nml%blocksize: ' ,lm4_model%nml%blocksize
-         write(*,*) 'lm4_model%nml%dt_lnd_slow ',lm4_model%nml%dt_lnd_slow
+         write(*,*) 'lm4_model%nml%lm4_debug: '        ,lm4_model%nml%lm4_debug
+         write(*,*) 'lm4_model%nml%grid: '             ,lm4_model%nml%grid
+         write(*,*) 'lm4_model%nml%npx: '              ,lm4_model%nml%npx
+         write(*,*) 'lm4_model%nml%npy: '              ,lm4_model%nml%npy
+         write(*,*) 'lm4_model%nml%layout: '           ,lm4_model%nml%layout
+         write(*,*) 'lm4_model%nml%ntiles: '           ,lm4_model%nml%ntiles
+         write(*,*) 'lm4_model%nml%blocksize: '        ,lm4_model%nml%blocksize
+         write(*,*) 'lm4_model%nml%dt_lnd_slow '       ,lm4_model%nml%dt_lnd_slow
+         write(*,*) 'lm4_model%nml%restart_interval: ' ,lm4_model%nml%restart_interval
+         write(*,*) 'lm4_model%nml%cpl2atm: '          ,lm4_model%nml%cpl2atm
       endif
 
 
@@ -336,7 +338,9 @@ contains
       if (debug_cap > 0) then
          call alloc_atmforc2d(lm4_model%atm_forc2d) ! TMP DEBUG
       endif
-      call alloc_atmsfc(lm4_model%atm_sfc)
+      if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
+         call alloc_atmsfc(lm4_model%atm_sfc)
+      end if
 
       !----------------------------------------------------------------------------
       ! advertise fields
@@ -536,6 +540,11 @@ contains
       call update_atmos_model_down(lm4_model)              ! for gust calculation with data atmosphere
       call flux_down_from_atmos(real(sec), lm4_model)      ! JP: needs review of implicit coupling
       call update_land_model_fast(lm4_model%From_atm,lm4_model%From_lnd)
+
+      if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
+         call flux_down_from_atmos(real(sec), lm4_model)
+      end if
+
       call flux_up_to_atmos(lm4_model)
 
 
@@ -631,7 +640,10 @@ contains
       if (debug_cap > 0) then
          call dealloc_atmforc2d(lm4_model%atm_forc2d) ! TMP DEBUG
       endif
-      call dealloc_atmsfc(lm4_model%atm_sfc)
+      
+      if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
+         call dealloc_atmsfc(lm4_model%atm_sfc)
+      end if      
 
       call ESMF_LogWrite(subname//' finished', ESMF_LOGMSG_INFO)
 

@@ -162,13 +162,15 @@ contains
       integer, dimension(6) :: restart_interval = (/ 0, 0, 0, 0, 0, 0/) !< The time interval that write out intermediate restart file.
       !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
       !! is all zero, no intermediate restart file will be written out
+      logical           :: cpl2atm     = .false.   ! coupling to active atmosphere 
 
       ! TODO: are all these still needed?
 
       ! for namelist read
       integer :: unit, io, ierr
-      namelist /lm4_nml/ grid, npx, npy, layout, ntiles, &
-         blocksize, lm4_debug, dt_lnd_slow, restart_interval
+      namelist /lm4_nml/ grid, npx, npy, layout, ntiles,      &
+         blocksize, lm4_debug, dt_lnd_slow, restart_interval, &
+         cpl2atm
 
       ! read in namelists
       ! ------------------------------------------
@@ -206,15 +208,16 @@ contains
 #endif
       endif
 
-      lm4_model%nml%lm4_debug   = lm4_debug
-      lm4_model%nml%grid        = grid
-      lm4_model%nml%blocksize   = blocksize
-      lm4_model%nml%npx         = npx
-      lm4_model%nml%npy         = npy
-      lm4_model%nml%layout      = layout
-      lm4_model%nml%ntiles      = ntiles
-      lm4_model%nml%dt_lnd_slow = dt_lnd_slow
+      lm4_model%nml%lm4_debug        = lm4_debug
+      lm4_model%nml%grid             = grid
+      lm4_model%nml%blocksize        = blocksize
+      lm4_model%nml%npx              = npx
+      lm4_model%nml%npy              = npy
+      lm4_model%nml%layout           = layout
+      lm4_model%nml%ntiles           = ntiles
+      lm4_model%nml%dt_lnd_slow      = dt_lnd_slow
       lm4_model%nml%restart_interval = restart_interval
+      lm4_model%nml%cpl2atm          = cpl2atm
 
    end subroutine lm4_nml_read
 

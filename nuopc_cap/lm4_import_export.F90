@@ -466,7 +466,7 @@ contains
       ! local variables
       type(ESMF_State)            :: importState
       character(len=*), parameter :: subname=trim(modName)//':(import_fields)'
-      logical           :: first_call = .true.  ! JP TMP DEBUG
+      logical                     :: first_call = .true. 
 
       ! ----------------------------------------------
 
@@ -503,8 +503,8 @@ contains
       call state_getimport_2d(importState, 'Faxa_swndr', lm4data_1d=lm4_model%atm_forc%flux_sw_down_nir_dir, rc=rc) ! mean surface downward nir direct flux
 
 
-      ! only do this on 1st time step
-      if (first_call) then
+      ! only do this on 1st time step, when have active atm model
+      if (lm4_model%nml%cpl2atm .and. first_call) then
          write( *,*) 'JPp using init value of lm4_model%atm_forc%p_surf'
          lm4_model%atm_forc%p_surf = 97015
          first_call = .false.
@@ -657,20 +657,9 @@ contains
 
          call state_setexport_2d(exportState, 'Sl_q',      lm4data_1d=lm4_model%atm_sfc%q_surf,rc=rc)
 
-         !JP TMP fill export fields used by noah
-         ! call state_setexport_2d(exportState, 'Sl_cmm',    lm4data_2d=0.032+0.0*lnd%sg_landfrac,rc=rc)
-         ! call state_setexport_2d(exportState, 'Sl_chh',    lm4data_2d=0.017+0.0*lnd%sg_landfrac,rc=rc)
-         ! call state_setexport_2d(exportState, 'Sl_zvfun',  lm4data_2d=0.340+0.0*lnd%sg_landfrac,rc=rc)
-
-         !! These seem to only be needed by UFS atm for diagnostics
-         ! call state_setexport_2d(exportState, 'Fall_evap', lm4data_2d=0.000001+0.0*lnd%sg_landfrac,rc=rc)
-         ! call state_setexport_2d(exportState, 'Sl_tref',   lm4data_2d=300.0+0.0*lnd%sg_landfrac,rc=rc)
-         ! call state_setexport_2d(exportState, 'Sl_qref',   lm4data_2d=0.0003*+0.0*lnd%sg_landfrac,rc=rc)  
-         !! These don't seem to be needed by UFS atm, even for diagnostics       
-         ! call state_setexport_2d(exportState, 'Fall_roff', lm4data_2d=0.0*lnd%sg_landfrac,rc=rc)
-         ! call state_setexport_2d(exportState, 'Fall_soff', lm4data_2d=0.0*lnd%sg_landfrac,rc=rc)     
-         ! call state_setexport_2d(exportState, 'Fall_gflx', lm4data_2d=0.0001+0*lnd%sg_landfrac,rc=rc)
-         !JP END
+         ! Note, comped to to NoahMP comp, still need to export Sl_cmm, Sl_chh, Sl_zvfun
+         ! Also other fields that seem to be needed by UFS atm for diagnostics:
+         ! Fall_evap, Sl_tref, Sl_qref, Fall_roff, Fall_soff, Fall_gflx
       end if
 
    end subroutine export_fields
@@ -792,7 +781,7 @@ contains
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
          fldptr2d = 0.0_r8 
-
+         
          ! pass structured grid data to structured grid
          if (present(lm4data_2d)) then
             fldptr2d(:,:) = lm4data_2d(:,:)
