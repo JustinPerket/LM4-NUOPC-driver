@@ -152,6 +152,10 @@ contains
       allocate( bnd%q_surf(lnd%ls:lnd%le) )
       !allocate( bnd%dt_t(lnd%ls:lnd%le) )
 
+      bnd%shflx = 0.0
+      bnd%lhflx = 0.0
+      bnd%q_surf = 0.0
+
    end subroutine alloc_atmsfc
 
    subroutine dealloc_atmforc(bnd)
