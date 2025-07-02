@@ -44,8 +44,10 @@ module lm4_driver
 
    ! --- namelist of vars originally from flux exchange nml
    real :: z_ref_heat =  2. !< Reference height (meters) for temperature and relative humidity diagnostics (t_ref, rh_ref, del_h, del_q)
+   real :: z_ref_mom  = 10. !< Reference height (meters) for momentum diagnostics (u_ref, v_ref, del_m)
+
    ! TODO: rename this nml?
-   namelist /flux_exchange_nml/ z_ref_heat
+   namelist /flux_exchange_nml/ z_ref_heat, z_ref_mom
 
    ! --- namelist of vars originally from atmos_prescr_nml
    character(len=24) :: gust_to_use = 'computed' ! or 'prescribed'
@@ -575,7 +577,7 @@ contains
 
 
       !! ....
-      zrefm = 10.0
+      zrefm = z_ref_mom
       zrefh = z_ref_heat
       !      ---- optimize calculation ----
       ! write(*,*) 'DEBUG: calling mo_profile'
@@ -943,8 +945,6 @@ contains
          ex_delta_tr_n
 
       integer :: l, tr 
-
-      
 
       !----- compute surface temperature change ----- 
 
