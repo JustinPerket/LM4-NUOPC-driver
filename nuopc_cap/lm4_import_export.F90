@@ -19,7 +19,7 @@ module lm4_import_export
    use land_data_mod,            only: lnd ! global data
    use land_data_mod,            only: land_data_type, atmos_land_boundary_type
    use nuopc_lm4_methods,        only: chkerr
-   use mpp_domains_mod,          only : mpp_pass_sg_to_ug
+   use mpp_domains_mod,          only: mpp_pass_sg_to_ug, mpp_pass_ug_to_sg
 
    implicit none
    private ! except
@@ -466,6 +466,8 @@ contains
       ! local variables
       type(ESMF_State)            :: importState
       character(len=*), parameter :: subname=trim(modName)//':(import_fields)'
+      logical                     :: first_call = .true. 
+
       ! ----------------------------------------------
 
       rc = ESMF_SUCCESS
@@ -500,11 +502,13 @@ contains
       call state_getimport_2d(importState, 'Faxa_swndf', lm4data_1d=lm4_model%atm_forc%flux_sw_down_nir_dif, rc=rc) ! mean surface downward nir diffuse flux
       call state_getimport_2d(importState, 'Faxa_swndr', lm4data_1d=lm4_model%atm_forc%flux_sw_down_nir_dir, rc=rc) ! mean surface downward nir direct flux
 
-      ! call state_getimport_2d(importState, 'Faxa_swdn' , lm4data_1d=lm4_model%atm_forc%flux_sw, rc=rc) ! mean downward SW heat flux
-      ! call state_getimport_2d(importState, 'Faxa_swnet', lm4data_1d=lm4_model%atm_forc%flux_sw, rc=rc) ! mean_net_sw_flx
-      ! call state_getimport_2d(importState, 'Sa_vfrac',  lm4data_1d=lm4_model%atm_forc%vfrac, rc=rc)  ! vegetation fraction
-      ! call state_getimport_2d(importState, 'Sa_zorl',   lm4data_1d=lm4_model%atm_forc%zorl, rc=rc)   ! roughness length
 
+      ! only do this on 1st time step, when have active atm model
+      if (lm4_model%nml%cpl2atm .and. first_call) then
+         write( *,*) 'JPp using init value of lm4_model%atm_forc%p_surf'
+         lm4_model%atm_forc%p_surf = 97015
+         first_call = .false.
+      end if
 
       if (ie_debug > 0) then ! Also want Structured Grid data
          call state_getimport_2d(importState, 'Sa_z',       lm4data_2d=lm4_model%atm_forc2d%z_bot,   rc=rc)
@@ -524,16 +528,6 @@ contains
          call state_getimport_2d(importState, 'Faxa_swndf', lm4data_2d=lm4_model%atm_forc2d%flux_sw_down_nir_dif, rc=rc)
          call state_getimport_2d(importState, 'Faxa_swndr', lm4data_2d=lm4_model%atm_forc2d%flux_sw_down_nir_dir, rc=rc)
       end if
-
-      ! ! call state_getimport_2d(importState, 'Sa_exner'  , cplr2land%, rc=rc)
-      ! ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
-      ! ! call state_getimport_2d(importState, 'Sa_ustar'  , cplr2land%, rc=rc)
-      ! ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-      ! ! call state_getimport_2d(importState, 'vfrac'     , cplr2land%, rc=rc)
-      ! ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
-      ! ! call state_getimport_2d(importState, 'zorl'      , cplr2land%, rc=rc)
-      ! ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
       call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
@@ -634,11 +628,11 @@ contains
    end subroutine correct_import_fields
 
    !===============================================================================
-   subroutine export_fields(gcomp, rc)
+   subroutine export_fields(gcomp, lm4_model, rc)
 
       ! input/output variables
       type(ESMF_GridComp),              intent(in)    :: gcomp
-      !type(lm4_type),                   intent(in)    :: lm4_model
+      type(lm4_type),                   intent(in)    :: lm4_model
       integer,                          intent(out)   :: rc
 
       ! local variables
@@ -654,9 +648,19 @@ contains
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
       ! export to mediator
-      call state_setexport_2d(exportState, 'Sl_lfrin', lnd%sg_landfrac,rc=rc)
+      call state_setexport_2d(exportState, 'Sl_lfrin', lm4data_2d=lnd%sg_landfrac,rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+      if (send_to_atm) then     
+         call state_setexport_2d(exportState, 'Fall_lat',  lm4data_1d=lm4_model%atm_sfc%lhflx, rc=rc)
+         call state_setexport_2d(exportState, 'Fall_sen',  lm4data_1d=lm4_model%atm_sfc%shflx,rc=rc)
+
+         call state_setexport_2d(exportState, 'Sl_q',      lm4data_1d=lm4_model%atm_sfc%q_surf,rc=rc)
+
+         ! Note, comped to to NoahMP comp, still need to export Sl_cmm, Sl_chh, Sl_zvfun
+         ! Also other fields that seem to be needed by UFS atm for diagnostics:
+         ! Fall_evap, Sl_tref, Sl_qref, Fall_roff, Fall_soff, Fall_gflx
+      end if
 
    end subroutine export_fields
 
@@ -714,7 +718,6 @@ contains
       character(len=*),  intent(in)    :: fldname
       real(r8), optional, intent(inout) :: lm4data_1d(:)      ! 1d, Unstructured Grid output
       real(r8), optional, intent(inout) :: lm4data_2d(:,:)    ! 2d, Structured Grid output
-      ! logical,  optional, intent(in)  :: debug_print
       integer,           intent(out)   :: rc
 
       ! local variables
@@ -742,16 +745,6 @@ contains
          if (present(lm4data_1d)) then
             call mpp_pass_sg_to_ug(lnd%ug_domain, fldptr2d, lm4data_1d)
          end if
-
-         ! if (present(debug_print)) then
-         !    if (debug_print) then
-         !       call ESMF_LogWrite(subname//' '//trim(fldname)//' min/max: '// &
-         !                          trim(str(fldptr2d%min))//' '//trim(str(fldptr2d%max)), ESMF_LOGMSG_INFO)
-
-         !    end if
-         ! end if
-
-
       else
          call ESMF_LogWrite(subname//' '//trim(fldname)//' is not in the state!', ESMF_LOGMSG_INFO)
       end if
@@ -760,7 +753,7 @@ contains
    end subroutine state_getimport_2d
 
    !===============================================================================
-   subroutine state_setexport_2d(state, fldname, lm4data, minus, rc)
+   subroutine state_setexport_2d(state, fldname, lm4data_1d, lm4data_2d, rc)
       ! fill in lm4 export data for 2d field (ie, structured grid)
       use ESMF, only : ESMF_LOGERR_PASSTHRU, ESMF_END_ABORT, ESMF_LogFoundError
       use ESMF, only : ESMF_Finalize
@@ -768,23 +761,38 @@ contains
       ! input/output variabes
       type(ESMF_State) , intent(in)  :: state
       character(len=*) , intent(in)  :: fldname
-      real(r8)         , intent(in)  :: lm4data(:,:)
-      logical, optional, intent(in)  :: minus
+      real(r8), optional, intent(in) :: lm4data_1d(:)      ! 1d, Unstructured Grid input
+      real(r8), optional, intent(in) :: lm4data_2d(:,:)    ! 2d, Structured Grid input      
       integer          , intent(out) :: rc
 
       ! local variables
       real(r8), pointer :: fldPtr2d(:,:)
-      character(len=*), parameter :: subname='(lnd_export_export:state_setexport_1d)'
+      type(ESMF_StateItem_Flag)   :: itemType
+      character(len=*), parameter :: subname='(lnd_export_export:state_setexport_2d)'
       ! ----------------------------------------------
 
 
-      call state_getfldptr(state, trim(fldname), fldptr2d=fldptr2d, rc=rc)
+      call ESMF_StateGet(state, itemName=trim(fldname), itemType=itemType, rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      
+      if (itemType == ESMF_STATEITEM_FIELD) then
 
-      if (present(minus)) then
-         fldptr2d(:,:) = -lm4data(:,:)
+         call state_getfldptr(state, trim(fldname), fldptr2d=fldptr2d, rc=rc)
+         if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+         fldptr2d = 0.0_r8 
+         
+         ! pass structured grid data to structured grid
+         if (present(lm4data_2d)) then
+            fldptr2d(:,:) = lm4data_2d(:,:)
+         end if
+
+         ! pass unstructured grid data to structured grid
+         if (present(lm4data_1d)) then
+            call mpp_pass_ug_to_sg(lnd%ug_domain, lm4data_1d, fldptr2d)
+         end if
       else
-         fldptr2d(:,:) = lm4data(:,:)
+         call ESMF_LogWrite(subname//' '//trim(fldname)//' is not in the state!', ESMF_LOGMSG_INFO)
       end if
 
    end subroutine state_setexport_2d

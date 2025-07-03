@@ -18,6 +18,7 @@ module lm4_type_mod
       integer, dimension(6) :: restart_interval = (/ 0, 0, 0, 0, 0, 0/) !< The time interval that write out intermediate restart file.
                                                                         !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
                                                                         !! is all zero, no intermediate restart file will be written out
+      logical           :: cpl2atm      ! coupling to active atmosphere
    end type lm4_nml_type
 
    ! TODO: is this used at all?
@@ -61,8 +62,16 @@ module lm4_type_mod
          flux_sw_vis            => NULL(), &
          flux_sw_vis_dir        => NULL(), &
          flux_sw_vis_dif        => NULL()
-
    end type atm_forc_type
+
+   ! type for data sent from LM4 to atmosphere through NUOPC mediator
+   type, public :: atm_sfc_type
+      real, pointer, dimension(:) ::  &
+         ! dt_t      => NULL(), &
+         shflx     => NULL(), &   ! sensible heat flux, W/m2   
+         lhflx     => NULL(), &   ! latent heat flux, W/m2
+         q_surf   => NULL()       ! specific humidity at the surface, kg/kg
+   end type atm_sfc_type
 
    ! TMP DEBUG
    type, public :: atm_forc2d_type
@@ -104,6 +113,7 @@ module lm4_type_mod
       type(lm4_cpl_scalar_type)      :: cpl_scalar ! for scalars to mediator
       type(atm_forc_type)            :: atm_forc   ! data from atm 
       type(atm_forc2d_type)          :: atm_forc2d ! TMP DEBUG
+      type(atm_sfc_type)             :: atm_sfc    ! data to atm
       ! these are passed to the land model's routines:
       type(land_data_type)           :: From_lnd   ! data from land
       type(atmos_land_boundary_type) :: From_atm   ! data from atm      
@@ -115,6 +125,39 @@ module lm4_type_mod
    end type lm4_type
 
 contains
+
+   subroutine dealloc_atmsfc(bnd)
+
+      !! for every variable in atm_sfc_type, if associated, deallocate
+
+      type(atm_sfc_type), intent(inout) :: bnd
+
+      if (associated(bnd%shflx))  deallocate(bnd%shflx)
+      if (associated(bnd%lhflx))  deallocate(bnd%lhflx)
+      if (associated(bnd%q_surf)) deallocate(bnd%q_surf)
+      !if (associated(bnd%dt_t)) deallocate(bnd%dt_t)
+
+   end subroutine dealloc_atmsfc
+
+   subroutine alloc_atmsfc(bnd)
+      !! must be called after land_data_init
+
+      use land_data_mod, only : lnd
+
+      type(atm_sfc_type), intent(inout) :: bnd
+
+      call dealloc_atmsfc(bnd)
+
+      allocate( bnd%shflx(lnd%ls:lnd%le) )
+      allocate( bnd%lhflx(lnd%ls:lnd%le) )
+      allocate( bnd%q_surf(lnd%ls:lnd%le) )
+      !allocate( bnd%dt_t(lnd%ls:lnd%le) )
+
+      bnd%shflx = 0.0
+      bnd%lhflx = 0.0
+      bnd%q_surf = 0.0
+
+   end subroutine alloc_atmsfc
 
    subroutine dealloc_atmforc(bnd)
       !! for every variable in atm_forc_type, if associated, deallocate

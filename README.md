@@ -34,6 +34,7 @@ Defaults for the `lm4_nml` if not specified in the run directory `input.nml` are
       restart_interval = (/ 0, 0, 0, 0, 0, 0/) ! The time interval that write out intermediate restart file.
                                                ! The format is (yr,mo,day,hr,min,sec).  When restart_interval
                                                ! is all zero, no intermediate restart file will be written out
+      cpl2atm     = .false.     ! coupling to active atmosphere
 
 Additional, `flux_exchange_nml` and `atmos_prescr_nml` are existing namelists in `input.nml` at GFDL, and are needed by LM4 in UFS.
 They have been brought back in, only for the options used in LM4, and are read in by the land model.
@@ -83,6 +84,7 @@ In `tests/parm/input_datm_lm4.nml.IN`, these options are set to:
           blocksize = -1
           dt_lnd_slow = 3600
           restart_interval = 0,0,0,6,0,0
+          cpl2atm = .false.
     /
     
     &surface_flux_nml
