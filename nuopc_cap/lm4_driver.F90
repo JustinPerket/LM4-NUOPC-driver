@@ -442,7 +442,6 @@ contains
       real, dimension(lnd%ls:lnd%le) :: &
          ex_t_surf_miz, &
          ex_p_surf   ,  &
-         ex_q_surf  ,  &
       !ex_slp      ,  &
          ex_dqsatdt_surf,  &
 
@@ -478,7 +477,6 @@ contains
       ! prefill q_surf with q_bot. In original code, there were options to send/write
       ! before surface_flux call.
       ex_tr_surf(:,isphum) = lm4_model%atm_forc%q_bot
-      ex_q_surf            = lm4_model%atm_forc%q_bot
 
       ! TODO: review
       do tr = 1,ntcana
@@ -548,7 +546,6 @@ contains
       ! call send_tile_data(iug_gust       , ex_gust       )
 
 
-      ex_tr_surf(1,isphum) = ex_q_surf(1)  ! TODO: review this connection
 
 
       !1 TODO: make sure output args that are used outside of this routine have the right scope
@@ -576,7 +573,6 @@ contains
          ex_land, ex_seawater, ex_avail                                 & ! Is land, Is seawater, Is ex. avail
          )
 
-      ex_q_surf(1) = ex_tr_surf(1,isphum)  ! TODO: review this connection
 
 
       !! ....
