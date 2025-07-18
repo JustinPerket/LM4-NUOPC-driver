@@ -206,8 +206,7 @@ contains
       call lm4_nml_read(lm4_model)
       debug_cap = lm4_model%nml%lm4_debug
 
-      ! if lm4_model%nml%lm4_debug is set, and > 0, write out namelist variables read in 
-      if (mype == 0 .and. debug_cap > 0) then
+      if (mype == 0) then
          write(*,*) 'lm4_model%nml%lm4_debug: '        ,lm4_model%nml%lm4_debug
          write(*,*) 'lm4_model%nml%grid: '             ,lm4_model%nml%grid
          write(*,*) 'lm4_model%nml%npx: '              ,lm4_model%nml%npx
@@ -218,6 +217,8 @@ contains
          write(*,*) 'lm4_model%nml%dt_lnd_slow '       ,lm4_model%nml%dt_lnd_slow
          write(*,*) 'lm4_model%nml%restart_interval: ' ,lm4_model%nml%restart_interval
          write(*,*) 'lm4_model%nml%cpl2atm: '          ,lm4_model%nml%cpl2atm
+         write(*,*) 'lm4_model%nml%kinematic_flux: '   ,lm4_model%nml%kinematic_flux
+         write(*,*) 'lm4_model%nml%implicit_atm: ',lm4_model%nml%implicit_atm
       endif
 
 
