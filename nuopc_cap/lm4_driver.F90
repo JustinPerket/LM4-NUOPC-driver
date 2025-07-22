@@ -163,7 +163,7 @@ contains
       !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
       !! is all zero, no intermediate restart file will be written out
       logical           :: cpl2atm           = .false. ! coupling to active atmosphere 
-      logical           :: kinematic_flux    = .false. ! some fluxes to atm are expressed as kinematic
+      logical           :: kinematic_flux    = .true. ! some fluxes to atm are expressed as kinematic
       logical           :: implicit_atm      = .false.  ! coupling to atm either explicit or implicit
 
       ! TODO: are all these still needed?
@@ -835,13 +835,15 @@ contains
             ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
          call ESMF_Finalize(endflag=ESMF_END_ABORT)
 
+         !ex_dtmass = real(dt)*grav/lm4_model%atm_forc%p_surf
+
       else  ! ie, explicit atm coupling
          ex_dtmass = 0
-      cp_inv = 1.0/cp_air
-      ex_delta_tr = 0.0
-      ex_dflux_tr = 0.0
-      ex_delta_t = 0.0  !
-      ex_dflux_t = 0.0  !
+         cp_inv = 1.0/cp_air
+         ex_delta_tr = 0.0
+         ex_dflux_tr = 0.0
+         ex_delta_t = 0.0  !
+         ex_dflux_t = 0.0  !
       end if         
 
 
