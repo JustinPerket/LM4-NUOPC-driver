@@ -162,8 +162,8 @@ contains
       integer, dimension(6) :: restart_interval = (/ 0, 0, 0, 0, 0, 0/) !< The time interval that write out intermediate restart file.
       !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
       !! is all zero, no intermediate restart file will be written out
-      logical           :: cpl2atm           = .false. ! coupling to active atmosphere 
-      logical           :: kinematic_flux    = .true. ! some fluxes to atm are expressed as kinematic
+      logical           :: cpl2atm           = .false.  ! coupling to active atmosphere 
+      logical           :: kinematic_flux    = .true.   ! some fluxes to atm are expressed as kinematic
       logical           :: implicit_atm      = .false.  ! coupling to atm either explicit or implicit
 
       ! TODO: are all these still needed?
@@ -221,7 +221,7 @@ contains
       lm4_model%nml%restart_interval = restart_interval
       lm4_model%nml%cpl2atm          = cpl2atm
       lm4_model%nml%kinematic_flux   = kinematic_flux
-      lm4_model%nml%implicit_atm = implicit_atm
+      lm4_model%nml%implicit_atm     = implicit_atm
 
    end subroutine lm4_nml_read
 
@@ -813,9 +813,9 @@ contains
 
       integer :: l, tr
 
-      ! NOTE. Not including here: 
-      ! 1. scale_precip_2d functionality -DONT NEED
-      ! 2. partition_fprec_from_lprec functionality -DONT NEED
+      ! NOTE. Not including here (not needed): 
+      ! 1. scale_precip_2d functionality
+      ! 2. partition_fprec_from_lprec functionality
       ! 3. sw1way_bug, use_AM3_physics, _USE_LEGACY_LAND_, or SCM functionality
       ! 4. OMP parallelization
       ! 5. Stock changes
@@ -1056,10 +1056,10 @@ contains
 
       if (lm4_model%nml%kinematic_flux) then
          ! convert units from W/m2
-      rho = virtual_temp(ex_t_ca_new, ex_tr_surf_new(:,isphum))
-      rho = air_density(lm4_model%atm_forc%p_surf, rho)
-      lm4_model%atm_sfc%shflx = ex_flux_t/(rho*cp_air)  ! SH/(rho*c_p)
-      lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)/(rho*hlv)  ! LH/(rho*h_vap)
+         rho = virtual_temp(ex_t_ca_new, ex_tr_surf_new(:,isphum))
+         rho = air_density(lm4_model%atm_forc%p_surf, rho)
+         lm4_model%atm_sfc%shflx = ex_flux_t/(rho*cp_air)  ! SH/(rho*c_p)
+         lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)/(rho*hlv)  ! LH/(rho*h_vap)
       else
          lm4_model%atm_sfc%shflx = ex_flux_t  ! SH
          lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)  ! LH

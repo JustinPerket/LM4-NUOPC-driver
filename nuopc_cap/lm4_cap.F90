@@ -218,7 +218,7 @@ contains
          write(*,*) 'lm4_model%nml%restart_interval: ' ,lm4_model%nml%restart_interval
          write(*,*) 'lm4_model%nml%cpl2atm: '          ,lm4_model%nml%cpl2atm
          write(*,*) 'lm4_model%nml%kinematic_flux: '   ,lm4_model%nml%kinematic_flux
-         write(*,*) 'lm4_model%nml%implicit_atm: ',lm4_model%nml%implicit_atm
+         write(*,*) 'lm4_model%nml%implicit_atm: '     ,lm4_model%nml%implicit_atm
       endif
 
 
