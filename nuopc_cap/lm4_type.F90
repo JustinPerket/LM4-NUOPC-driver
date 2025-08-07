@@ -18,7 +18,9 @@ module lm4_type_mod
       integer, dimension(6) :: restart_interval = (/ 0, 0, 0, 0, 0, 0/) !< The time interval that write out intermediate restart file.
                                                                         !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
                                                                         !! is all zero, no intermediate restart file will be written out
-      logical           :: cpl2atm      ! coupling to active atmosphere
+      logical           :: cpl2atm           ! coupling to active atmosphere
+      logical           :: kinematic_flux    ! some fluxes to atm are expressed as kinematic 
+      logical           :: implicit_atm ! coupling to atm either explicit or implicit
    end type lm4_nml_type
 
    ! TODO: is this used at all?

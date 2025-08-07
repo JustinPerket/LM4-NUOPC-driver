@@ -162,7 +162,9 @@ contains
       integer, dimension(6) :: restart_interval = (/ 0, 0, 0, 0, 0, 0/) !< The time interval that write out intermediate restart file.
       !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
       !! is all zero, no intermediate restart file will be written out
-      logical           :: cpl2atm     = .false.   ! coupling to active atmosphere 
+      logical           :: cpl2atm           = .false.  ! coupling to active atmosphere 
+      logical           :: kinematic_flux    = .true.   ! some fluxes to atm are expressed as kinematic
+      logical           :: implicit_atm      = .false.  ! coupling to atm either explicit or implicit
 
       ! TODO: are all these still needed?
 
@@ -170,7 +172,7 @@ contains
       integer :: unit, io, ierr
       namelist /lm4_nml/ grid, npx, npy, layout, ntiles,      &
          blocksize, lm4_debug, dt_lnd_slow, restart_interval, &
-         cpl2atm
+         cpl2atm, kinematic_flux, implicit_atm
 
       ! read in namelists
       ! ------------------------------------------
@@ -218,6 +220,8 @@ contains
       lm4_model%nml%dt_lnd_slow      = dt_lnd_slow
       lm4_model%nml%restart_interval = restart_interval
       lm4_model%nml%cpl2atm          = cpl2atm
+      lm4_model%nml%kinematic_flux   = kinematic_flux
+      lm4_model%nml%implicit_atm     = implicit_atm
 
    end subroutine lm4_nml_read
 
@@ -442,6 +446,7 @@ contains
       real, dimension(lnd%ls:lnd%le) :: &
          ex_t_surf_miz, &
          ex_p_surf   ,  &
+         ex_q_surf  ,  &
       !ex_slp      ,  &
          ex_dqsatdt_surf,  &
 
@@ -579,12 +584,10 @@ contains
       zrefm = z_ref_mom
       zrefh = z_ref_heat
       !      ---- optimize calculation ----
-      ! write(*,*) 'DEBUG: calling mo_profile'
       call mo_profile ( zrefm, zrefh, lm4_model%atm_forc%z_bot, ex_rough_mom, &
          ex_rough_heat, ex_rough_moist,          &
          ex_u_star, ex_b_star, ex_q_star,        &
          ex_del_m, ex_del_h, ex_del_q, ex_avail  )
-      ! write(*,*) 'DEBUG: done calling mo_profile'
 
       do l = lnd%ls,lnd%le
          ex_u10(l) = 0.
@@ -595,16 +598,25 @@ contains
          endif
       enddo
 
-      !! TODO: is this needed?
-      ! do n = 1, ex_gas_fields_atm%num_bcs  !{
-      !    if (atm%fields%bc(n)%use_10m_wind_speed) then  !{
-      !       if (.not. ex_gas_fields_atm%bc(n)%field(ind_u10)%override) then  !{
-      !          do l = lnd%ls,lnd%le
-      !             ex_gas_fields_atm%bc(n)%field(ind_u10)%values(l) = ex_u10(l)
-      !          enddo
-      !       endif  !}
-      !    endif  !}
-      ! enddo  !} n
+   !    !TODO: convert this:
+   !     ! F = C0*u*rho*delta_q, C0*u*rho is the same for all tracers, copy from sphum
+   !     do tr = 1,n_exch_tr
+   !        if (tr==isphum) cycle
+   !        do i = is,ie
+   !           ! slm: ex_dfdtr_surf(:,isphum) is manipulated in surface_flux: it is set to
+   !           ! zero over the ocean, so it is not appropriate to use for other tracers.
+   !           ! However, since flux = rho*Cd*|v|*(q_surf-q_atm), we can simply use negative
+   !           ! dfdtr_atm for the dfdtr_surf derivative. This will break if ever the flux
+   !           ! formulation is changed to be not symmetrical w.r.t. q_surf and q_atm, but
+   !           ! then this whole section will have to be changed.
+   !           ex_dfdtr_atm  (i,tr) =  ex_dfdtr_atm  (i,isphum)
+   !           ex_dfdtr_surf (i,tr) = -ex_dfdtr_atm (i,isphum)
+   !           ex_flux_tr    (i,tr) =  ex_dfdtr_surf(i,tr)*(ex_tr_surf(i,tr)-ex_tr_atm(i,tr))
+   !        enddo
+   !     enddo
+   !  enddo ! end of block loop
+
+      ! TODO: need "fill derivatives for all tracers" block?
 
       do l = lnd%ls,lnd%le
          if(ex_avail(l)) ex_drag_q(l) = ex_wind(l)*ex_cd_q(l)
@@ -801,7 +813,7 @@ contains
 
       integer :: l, tr
 
-      ! NOTE. Not including here: (TODO: REVIEW)
+      ! NOTE. Not including here (not needed): 
       ! 1. scale_precip_2d functionality
       ! 2. partition_fprec_from_lprec functionality
       ! 3. sw1way_bug, use_AM3_physics, _USE_LEGACY_LAND_, or SCM functionality
@@ -818,17 +830,22 @@ contains
       ! TODO: ex_flux_lwd
       ex_flux_lwd = lm4_model%atm_forc%flux_lw
 
-      ! this echos standalone LM4.0 driver
-      ex_dtmass = real(dt)*grav/lm4_model%atm_forc%p_surf
-      cp_inv = 1.0/cp_air
+      if (lm4_model%nml%implicit_atm) then
+         call ESMF_LogWrite('flux_down_from_atmos: implicit atmosphere coupling not functional', &
+            ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
+         call ESMF_Finalize(endflag=ESMF_END_ABORT)
 
-      ! TODO: review behavior of these.
-      ! With data atmosphere, no implicit derivatives. Would need to review
-      ! for implicit coupling with active atmosphere.
-      ex_delta_tr = 0.0
-      ex_dflux_tr = 0.0
-      ex_delta_t = 0.0  !
-      ex_dflux_t = 0.0  !
+         !ex_dtmass = real(dt)*grav/lm4_model%atm_forc%p_surf
+
+      else  ! ie, explicit atm coupling
+         ex_dtmass = 0
+         cp_inv = 1.0/cp_air
+         ex_delta_tr = 0.0
+         ex_dflux_tr = 0.0
+         ex_delta_t = 0.0  !
+         ex_dflux_t = 0.0  !
+      end if         
+
 
       do l = lnd%ls,lnd%le
          !----- compute net longwave flux (down-up) -----
@@ -1035,18 +1052,18 @@ contains
       ! not originally to flux_up_to_atmos, but needed by ufs atm
       lm4_model%atm_sfc%q_surf = ex_tr_surf_new(:,isphum)  ! TODO: review if this is correct 
 
-      ! NEED TO CONVERT UNITS
-      rho = virtual_temp(ex_t_ca_new, ex_tr_surf_new(:,isphum))
-      rho = air_density(lm4_model%atm_forc%p_surf, rho)
 
-      ! TMP print rho
-      if (mpp_pe()== mpp_root_pe() ) then
-         write(*,*) 'JP DEBUG: rho in flux_up_to_atmos', rho
+
+      if (lm4_model%nml%kinematic_flux) then
+         ! convert units from W/m2
+         rho = virtual_temp(ex_t_ca_new, ex_tr_surf_new(:,isphum))
+         rho = air_density(lm4_model%atm_forc%p_surf, rho)
+         lm4_model%atm_sfc%shflx = ex_flux_t/(rho*cp_air)  ! SH/(rho*c_p)
+         lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)/(rho*hlv)  ! LH/(rho*h_vap)
+      else
+         lm4_model%atm_sfc%shflx = ex_flux_t  ! SH
+         lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)  ! LH
       endif
-
-      lm4_model%atm_sfc%shflx = ex_flux_t/(rho*cp_air)  ! SH/(rho*c_p)
-      lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)/(rho*hlv)  ! LH/(rho*h_vap)
-
 
       ! !=======================================================================
       ! !-------------------- diagnostics section ------------------------------
