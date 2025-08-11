@@ -72,11 +72,11 @@ module lm4_type_mod
          ! dt_t      => NULL(), &
          shflx     => NULL(), &   ! sensible heat flux, W/m2   
          lhflx     => NULL(), &   ! latent heat flux, W/m2
-         q_surf   => NULL()       ! specific humidity at the surface, kg/kg
+         q_surf   => NULL(),  &   ! specific humidity at the surface, kg/kg
 
-         albedo_vis_dir => NULL()
-         albedo_nir_dir => NULL()
-         albedo_vis_dif => NULL()
+         albedo_vis_dir => NULL(), &
+         albedo_nir_dir => NULL(), &
+         albedo_vis_dif => NULL(), &
          albedo_nir_dif => NULL()
 
    end type atm_sfc_type
