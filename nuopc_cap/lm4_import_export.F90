@@ -657,6 +657,14 @@ contains
 
          call state_setexport_2d(exportState, 'Sl_q',      lm4data_1d=lm4_model%atm_sfc%q_surf,rc=rc)
 
+         call state_setexport_2d(exportState, 'Sl_avsdr',  lm4data_1d=lm4_model%atm_sfc%albedo_vis_dir, rc=rc)
+         call state_setexport_2d(exportState, 'Sl_anidr',  lm4data_1d=lm4_model%atm_sfc%albedo_nir_dir, rc=rc)
+         call state_setexport_2d(exportState, 'Sl_avsdf',  lm4data_1d=lm4_model%atm_sfc%albedo_vis_dif, rc=rc)
+         call state_setexport_2d(exportState, 'Sl_anidf',  lm4data_1d=lm4_model%atm_sfc%albedo_nir_dif, rc=rc)
+
+
+
+
          ! Note, comped to to NoahMP comp, still need to export Sl_cmm, Sl_chh, Sl_zvfun
          ! Also other fields that seem to be needed by UFS atm for diagnostics:
          ! Fall_evap, Sl_tref, Sl_qref, Fall_roff, Fall_soff, Fall_gflx

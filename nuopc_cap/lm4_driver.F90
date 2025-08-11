@@ -454,18 +454,13 @@ contains
          ex_flux_u,    &
          ex_flux_v,    &
          ex_dtaudu_atm,&
-         ex_dtaudv_atm,&
+         ex_dtaudv_atm
 
       ! values added for LM3
 
       !ex_e_q_n    ,  &
 
-      !
-         ex_albedo_fix,        &
-         ex_albedo_vis_dir_fix,&
-         ex_albedo_nir_dir_fix,&
-         ex_albedo_vis_dif_fix,&
-         ex_albedo_nir_dif_fix
+
 
       integer :: tr, n, m ! tracer indices
       integer :: l
@@ -625,30 +620,17 @@ contains
          ex_t_surf4(l) = ex_t_surf(l) ** 4
       enddo
 
-      ! [6.3] save atmos albedo fix and old albedo (for downward SW flux calculations)
-      ! on exchange grid
-      do l = lnd%ls,lnd%le
-         ex_albedo_fix(l) = 0.
-         ex_albedo_vis_dir_fix(l) = 0.
-         ex_albedo_nir_dir_fix(l) = 0.
-         ex_albedo_vis_dif_fix(l) = 0.
-         ex_albedo_nir_dif_fix(l) = 0.
-      enddo
-
+      ! ignore '_fix' albedos in original code, just send land albedos for export
+      lm4_model%atm_sfc%albedo_vis_dir = lm4_model%From_lnd%albedo_vis_dir
+      lm4_model%atm_sfc%albedo_nir_dir = lm4_model%From_lnd%albedo_nir_dir
+      lm4_model%atm_sfc%albedo_vis_dif = lm4_model%From_lnd%albedo_vis_dif
+      lm4_model%atm_sfc%albedo_nir_dif = lm4_model%From_lnd%albedo_nir_dif      
 
       ! TODO: convert these from  xgrid and Land_Ice_Atmos_Boundary to atmos_land_boundary_type?
       ! [6.2] put relevant quantities onto atmospheric boundary
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%t,         'ATM', ex_t_surf4  ,  xmap_sfc, complete=.false.)
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%frac_open_sea,'ATM',ex_frac_open_sea, xmap_sfc)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo,    'ATM', ex_albedo   ,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo_vis_dir,    'ATM',   &
-      !      ex_albedo_vis_dir   ,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo_nir_dir,    'ATM',   &
-      !      ex_albedo_nir_dir   ,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo_vis_dif,    'ATM',   &
-      !      ex_albedo_vis_dif   ,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo_nir_dif,    'ATM',   &
-      !      ex_albedo_nir_dif   ,  xmap_sfc, complete=.false.)
+
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%rough_mom, 'ATM', ex_rough_mom,  xmap_sfc, complete=.false.)
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%land_frac, 'ATM', ex_land_frac,  xmap_sfc, complete=.false.)
 
