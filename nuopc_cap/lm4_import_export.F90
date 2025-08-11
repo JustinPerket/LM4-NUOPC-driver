@@ -104,6 +104,11 @@ contains
          call fldlist_add(fldsFrLnd_num, fldsFrlnd, 'Sl_cmm')
          call fldlist_add(fldsFrLnd_num, fldsFrlnd, 'Sl_chh')
          call fldlist_add(fldsFrLnd_num, fldsFrlnd, 'Sl_zvfun')
+         call fldlist_add(fldsFrLnd_num, fldsFrlnd, 'Sl_avsdr')
+         call fldlist_add(fldsFrLnd_num, fldsFrlnd, 'Sl_anidr')
+         call fldlist_add(fldsFrLnd_num, fldsFrlnd, 'Sl_avsdf')
+         call fldlist_add(fldsFrLnd_num, fldsFrlnd, 'Sl_anidf')
+
       end if
 
       ! Now advertise above export fields
