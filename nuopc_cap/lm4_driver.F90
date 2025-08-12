@@ -1047,6 +1047,8 @@ contains
          lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)  ! LH
       endif
 
+      lm4_model%atm_sfc%t_surf = ex_t_surf_new 
+
       ! !=======================================================================
       ! !-------------------- diagnostics section ------------------------------
 

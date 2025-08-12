@@ -73,6 +73,7 @@ module lm4_type_mod
          shflx     => NULL(), &   ! sensible heat flux, W/m2   
          lhflx     => NULL(), &   ! latent heat flux, W/m2
          q_surf   => NULL(),  &   ! specific humidity at the surface, kg/kg
+         t_surf   => NULL(),  &   ! radiative surface temperature, degK
 
          albedo_vis_dir => NULL(), &
          albedo_nir_dir => NULL(), &
@@ -143,6 +144,8 @@ contains
       if (associated(bnd%shflx))  deallocate(bnd%shflx)
       if (associated(bnd%lhflx))  deallocate(bnd%lhflx)
       if (associated(bnd%q_surf)) deallocate(bnd%q_surf)
+      if (associated(bnd%t_surf)) deallocate(bnd%t_surf)
+
       !if (associated(bnd%dt_t)) deallocate(bnd%dt_t)
       if (associated(bnd%albedo_vis_dir)) deallocate(bnd%albedo_vis_dir)
       if (associated(bnd%albedo_nir_dir)) deallocate(bnd%albedo_nir_dir)
@@ -164,6 +167,7 @@ contains
       allocate( bnd%shflx(lnd%ls:lnd%le) )
       allocate( bnd%lhflx(lnd%ls:lnd%le) )
       allocate( bnd%q_surf(lnd%ls:lnd%le) )
+      allocate( bnd%t_surf(lnd%ls:lnd%le) )
       !allocate( bnd%dt_t(lnd%ls:lnd%le) )
       allocate( bnd%albedo_vis_dir(lnd%ls:lnd%le) )
       allocate( bnd%albedo_nir_dir(lnd%ls:lnd%le) )
@@ -173,6 +177,7 @@ contains
       bnd%shflx = 0.0
       bnd%lhflx = 0.0
       bnd%q_surf = 0.0
+      bnd%t_surf = 0.0
 
       bnd%albedo_vis_dir = 0.0
       bnd%albedo_nir_dir = 0.0
