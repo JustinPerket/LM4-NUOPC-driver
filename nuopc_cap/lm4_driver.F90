@@ -319,7 +319,7 @@ contains
          lm4_model%Time_restart = increment_date(lm4_model%Time_end, 0, 0, 10, 0, 0, 0)   ! no intermediate restart
       else
 
-         lm4_model%Time_restart = increment_date(lm4_model%Time_init, lm4_model%nml%restart_interval(1), lm4_model%nml%restart_interval(2), &
+         lm4_model%Time_restart = increment_date(lm4_model%Time_land, lm4_model%nml%restart_interval(1), lm4_model%nml%restart_interval(2), &
             lm4_model%nml%restart_interval(3), lm4_model%nml%restart_interval(4), lm4_model%nml%restart_interval(5), lm4_model%nml%restart_interval(6) )
 
          ! subtract the fast time step in seconds
@@ -331,7 +331,7 @@ contains
 
 
          if (lm4_model%Time_restart < lm4_model%Time_land) then
-            call ESMF_LogWrite('The first intermediate restart time is larger than the start time', &
+            call ESMF_LogWrite('The first intermediate restart time is earlier than the current time', &
                ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
             call ESMF_Finalize(endflag=ESMF_END_ABORT)
 
