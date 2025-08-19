@@ -312,7 +312,8 @@ contains
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
       call ESMF_TimeIntervalGet(model_timestep, s=timestep_sec, rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return    
-      write(logmsg,*) timestep_sec
+      lm4_model%dt_secs = timestep_sec
+      write(logmsg,*) lm4_model%dt_secs
       call ESMF_LogWrite(trim(subname)//'init LM4 fast timestep: '//trim(logmsg), ESMF_LOGMSG_INFO)
 
       write(logmsg,*) lm4_model%nml%dt_lnd_slow

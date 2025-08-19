@@ -322,10 +322,10 @@ contains
          lm4_model%Time_restart = increment_date(lm4_model%Time_init, lm4_model%nml%restart_interval(1), lm4_model%nml%restart_interval(2), &
             lm4_model%nml%restart_interval(3), lm4_model%nml%restart_interval(4), lm4_model%nml%restart_interval(5), lm4_model%nml%restart_interval(6) )
 
-         ! subtract the slow time step in seconds
+         ! subtract the fast time step in seconds
          timestamp = date_to_string(lm4_model%Time_restart)
          call ESMF_LogWrite('LM4 init_driver: Time_restart before decrement' //trim(timestamp), ESMF_LOGMSG_INFO)
-         lm4_model%Time_restart = decrement_date(lm4_model%Time_restart, 0,0,0,0,0, lm4_model%nml%dt_lnd_slow)
+         lm4_model%Time_restart = decrement_date(lm4_model%Time_restart, 0,0,0,0,0, lm4_model%dt_secs)
          timestamp = date_to_string(lm4_model%Time_restart)
          call ESMF_LogWrite('LM4 init_driver: Time_restart after decrement' //trim(timestamp), ESMF_LOGMSG_INFO)
 
@@ -372,9 +372,9 @@ contains
          lm4_model%Time_restart = increment_date(lm4_model%Time_land, lm4_model%nml%restart_interval(1), lm4_model%nml%restart_interval(2), &
             lm4_model%nml%restart_interval(3), lm4_model%nml%restart_interval(4), lm4_model%nml%restart_interval(5), lm4_model%nml%restart_interval(6) )
 
-         ! To match behavior of GFDL coupler, advance the restart file timestamp by the slow time step
+         ! To match behavior of GFDL coupler, advance the restart file timestamp by the fast time step
          ! (datestamp is modeltime needed for restart)
-         Time_restart_stamp = increment_date(lm4_model%Time_land, 0,0,0,0,0, lm4_model%nml%dt_lnd_slow)
+         Time_restart_stamp = increment_date(lm4_model%Time_land, 0,0,0,0,0, lm4_model%dt_secs)
          timestamp = date_to_string(Time_restart_stamp)
          call ESMF_LogWrite('write_int_restart restart is written for '//trim(timestamp), ESMF_LOGMSG_INFO)
          call land_model_restart(timestamp)

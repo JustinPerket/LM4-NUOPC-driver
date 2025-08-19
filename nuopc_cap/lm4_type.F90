@@ -130,6 +130,7 @@ module lm4_type_mod
                                         Time_step_land, Time_step_slow, &
                                         Time_restart, Time_step_restart, &
                                         Time_atstart      
+      integer                        :: dt_secs ! fast time step in seconds
 
    end type lm4_type
 
