@@ -544,10 +544,9 @@ contains
       call update_land_model_fast(lm4_model%From_atm,lm4_model%From_lnd)
 
       if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
-         call flux_down_from_atmos(real(sec), lm4_model)
+         call flux_up_to_atmos(lm4_model)
       end if
 
-      call flux_up_to_atmos(lm4_model)
 
 
       call ESMF_ClockGet(dclock,  CurrTime=CurrTime, currSimTime=model_time, rc=rc)
