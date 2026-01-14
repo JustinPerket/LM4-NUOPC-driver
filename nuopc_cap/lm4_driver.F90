@@ -10,6 +10,7 @@ module lm4_driver
    use lm4_type_mod,         only: lm4_type
    use lm4_kind_mod,         only: r8 => shr_kind_r8, cl=>shr_kind_cl
    use land_data_mod,        only: land_data_type, atmos_land_boundary_type, lnd
+   use land_tile_mod,        only : land_tile_map
    use land_tracers_mod,     only: isphum, ico2, ntcana
    use lm4_surface_flux_mod, only: lm4_surface_flux_1d, virtual_temp, air_density
 
@@ -61,6 +62,12 @@ module lm4_driver
 
 
    ! variables for between subroutines
+
+   integer, allocatable :: tidx(:)     ! land tile indices for current domain
+   integer              :: ntiles_lnd  ! number of land tiles in current domain
+   integer              :: ntile_types ! number of land tile types in current domain
+   integer              :: k           ! loop index for land tiles
+
    real, allocatable, dimension(:) :: &
       ex_flux_t, ex_flux_lw,      &
       ex_dhdt_surf, ex_dedt_surf, &
@@ -234,6 +241,11 @@ contains
       use land_domain_mod,    only: domain_create
       use block_control_mod,  only: block_control_type, define_blocks_packed
       !use land_restart_mod,   only: sfc_prop_restart_read, sfc_prop_transfer
+      use land_tile_mod,      only : land_tile_enum_type, land_tile_type, &
+                                     first_elmt, loop_over_tiles, max_n_tiles, &
+                                     nitems, tile_exists_func
+      use land_tile_io_mod,   only : gather_tile_index
+                           
 
       type(lm4_type),          intent(inout) :: lm4_model ! land model's variable type
 
@@ -243,7 +255,14 @@ contains
       !integer                             ::   blocksize
       !logical, save                       :: block_message = .true.
 
+      ! JP TMP
+      type(land_tile_enum_type) :: ce ! tile list enumerator
+      type(land_tile_type), pointer :: tile
+      integer :: i, j, l
+      integer :: numtiles ! number of tiles in gridcell
+      procedure(tile_exists_func) :: tile_exists ! existence detector function:
 
+      ! end JP TMP
       integer :: isc, iec, jsc, jec
 
       ! FMS domain creation:
@@ -252,33 +271,33 @@ contains
       call mpp_get_compute_domain(land_domain,isc,iec,jsc,jec)
 
       allocate( &
-         ex_flux_t(lnd%ls:lnd%le), ex_flux_lw(lnd%ls:lnd%le),   &
-         ex_dhdt_surf(lnd%ls:lnd%le), ex_dedt_surf(lnd%ls:lnd%le), &
-         ex_drdt_surf(lnd%ls:lnd%le),  ex_dhdt_atm(lnd%ls:lnd%le), &
-         ex_drag_q(lnd%ls:lnd%le),     &   !< q drag.coeff.
-         ex_cd_t(lnd%ls:lnd%le),       &
-         ex_cd_m(lnd%ls:lnd%le),       &
-         ex_b_star(lnd%ls:lnd%le),     &
-         ex_u_star(lnd%ls:lnd%le),     &
-         ex_wind(lnd%ls:lnd%le),       &
-         ex_z_atm(lnd%ls:lnd%le),      &
-         ex_t_surf(lnd%ls:lnd%le),     &
-         ex_t_ca(lnd%ls:lnd%le),       &
-         ex_f_t_delt_n(lnd%ls:lnd%le), &   
-         ex_e_t_n(lnd%ls:lnd%le)       &        
+         ex_flux_t(ntiles_lnd), ex_flux_lw(ntiles_lnd),   &
+         ex_dhdt_surf(ntiles_lnd), ex_dedt_surf(ntiles_lnd), &
+         ex_drdt_surf(ntiles_lnd),  ex_dhdt_atm(ntiles_lnd), &
+         ex_drag_q(ntiles_lnd),     &   !< q drag.coeff.
+         ex_cd_t(ntiles_lnd),       &
+         ex_cd_m(ntiles_lnd),       &
+         ex_b_star(ntiles_lnd),     &
+         ex_u_star(ntiles_lnd),     &
+         ex_wind(ntiles_lnd),       &
+         ex_z_atm(ntiles_lnd),      &
+         ex_t_surf(ntiles_lnd),     &
+         ex_t_ca(ntiles_lnd),       &
+         ex_f_t_delt_n(ntiles_lnd), &   
+         ex_e_t_n(ntiles_lnd)       &        
          )
 
       ! these originally had a tracer dimension
       allocate( &
-         ex_tr_atm(lnd%ls:lnd%le,ntcana),      &
-         ex_tr_surf(lnd%ls:lnd%le,ntcana),     & !< near-surface tracer fields
-         ex_flux_tr(lnd%ls:lnd%le,ntcana),     & !< tracer fluxes
-         ex_dfdtr_surf(lnd%ls:lnd%le,ntcana),  & !< d(tracer flux)/d(surf tracer)
-         ex_dfdtr_atm(lnd%ls:lnd%le,ntcana),   & !< d(tracer flux)/d(atm tracer)
-         ex_e_tr_n(lnd%ls:lnd%le,ntcana),      & !< coefficient in implicit scheme
-         ex_f_tr_delt_n(lnd%ls:lnd%le,ntcana), & !< coefficient in implicit scheme
-         ex_avail(lnd%ls:lnd%le),              & !< true where data on exchange grid are available
-         ex_land(lnd%ls:lnd%le)                & !< true if exchange grid cell is over land
+         ex_tr_atm(ntiles_lnd,ntcana),      &
+         ex_tr_surf(ntiles_lnd,ntcana),     & !< near-surface tracer fields
+         ex_flux_tr(ntiles_lnd,ntcana),     & !< tracer fluxes
+         ex_dfdtr_surf(ntiles_lnd,ntcana),  & !< d(tracer flux)/d(surf tracer)
+         ex_dfdtr_atm(ntiles_lnd,ntcana),   & !< d(tracer flux)/d(atm tracer)
+         ex_e_tr_n(ntiles_lnd,ntcana),      & !< coefficient in implicit scheme
+         ex_f_tr_delt_n(ntiles_lnd,ntcana), & !< coefficient in implicit scheme
+         ex_avail(ntiles_lnd),              & !< true where data on exchange grid are available
+         ex_land(ntiles_lnd)                & !< true if exchange grid cell is over land
          )
 
       ! initialize reals
@@ -355,7 +374,48 @@ contains
          call compute_gust(lm4_model)
       endif
 
-         end subroutine init_driver
+
+      ntile_types = max_n_tiles()
+      write(logmsg, '(A,I4)') 'init_driver max number of land tile types = ', ntile_types
+      call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+
+      call gather_tile_index(land_tile_exists, tidx)
+      ntiles_lnd = size(tidx)
+      write(logmsg, '(A,I4)') 'init_driver number of land tiles = ', ntiles_lnd
+      call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+
+      ! ! count all land tiles and determine the length of tile dimension
+      ! ! sufficient for the current domain
+      ! numtiles = 0
+      ! do l = lnd%ls, lnd%le
+      !    k = nitems(land_tile_map(l))
+      !    numtiles = max(numtiles,k)
+      ! enddo
+      ! write(logmsg, '(A,I4)') 'init_driver 2 number of tiles = ', numtiles
+      ! call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+
+      ! call mpp_max(numtiles)
+      ! write(logmsg, '(A,I4)') 'init_driver 3 number of tiles = ', numtiles
+      ! call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+
+
+      ! JP TMP: test tile looping     
+      do k = 1, ntiles_lnd
+         write(logmsg, '(A,I8)') ' tile index = ', tidx(k)
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+
+      enddo
+      
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      ! do while(loop_over_tiles(ce, tile, l,k))   
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))   
+         ! write out: "init_driver tile loop tile,i,j,l,k = ", tile,i,j,l,k
+         write(logmsg, '(A,4I4)') 'init LM4 loop i,j,l,k = ', i,j,l,k
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+      enddo
+      ! end JP TMP
+
+   end subroutine init_driver
 
    !! ============================================================================
    !! Adapted from GFDL coupler, write intermediate restarts
@@ -407,7 +467,7 @@ contains
 
       real    :: zrefm, zrefh
 
-      real, dimension(lnd%ls:lnd%le) :: &
+      real, dimension(ntiles_lnd) :: &
          ex_albedo,             &
          ex_albedo_vis_dir,     &
          ex_albedo_nir_dir,     &
@@ -440,10 +500,10 @@ contains
       !! -- These were originally allocatable:
       !!
 
-      logical, dimension(lnd%ls:lnd%le) :: &
+      logical, dimension(ntiles_lnd) :: &
          ex_seawater       !< true if exchange grid cell is over seawater
 
-      real, dimension(lnd%ls:lnd%le) :: &
+      real, dimension(ntiles_lnd) :: &
          ex_t_surf_miz, &
          ex_p_surf   ,  &
          ex_q_surf  ,  &
@@ -480,7 +540,7 @@ contains
 
       ! TODO: review
       do tr = 1,ntcana
-         ex_tr_surf(:,tr) = lm4_model%From_lnd%tr(:,ntile,tr)
+         ex_tr_surf(:,tr) = lm4_model%From_lnd%tr(:,ntile_types,tr)
       enddo
 
       ex_t_atm  = lm4_model%atm_forc%t_bot
@@ -495,13 +555,13 @@ contains
 
       ! this is mimicking the original code for land roughness vars
       ! TODO: review and optimize
-      ex_rough_mom   = lm4_model%From_lnd%rough_mom(:,ntile)
-      ex_rough_moist = lm4_model%From_lnd%rough_heat(:,ntile)
-      ex_rough_heat  = lm4_model%From_lnd%rough_heat(:,ntile)
-      ex_rough_scale = lm4_model%From_lnd%rough_scale(:,ntile)
+      ex_rough_mom   = lm4_model%From_lnd%rough_mom(:,ntile_types)
+      ex_rough_moist = lm4_model%From_lnd%rough_heat(:,ntile_types)
+      ex_rough_heat  = lm4_model%From_lnd%rough_heat(:,ntile_types)
+      ex_rough_scale = lm4_model%From_lnd%rough_scale(:,ntile_types)
 
-      ex_t_surf = lm4_model%From_lnd%t_surf(:,ntile)
-      ex_t_ca   = lm4_model%From_lnd%t_ca(:,ntile)
+      ex_t_surf = lm4_model%From_lnd%t_surf(:,ntile_types)
+      ex_t_ca   = lm4_model%From_lnd%t_ca(:,ntile_types)
 
 
       ! initialize other variables to zero
@@ -546,6 +606,14 @@ contains
       ! call send_tile_data(iug_gust       , ex_gust       )
 
 
+      ! testing: loop over tiles
+      do k = 1, ntiles_lnd
+         ex_test_foo(k) = real(k)
+         write(logmsg, '(A,I4,F8.2)') 'sfc_boundary_layer tile loop k = ', k, ex_test_foo(k)
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+      enddo
+      ! end testing
+
 
 
       !1 TODO: make sure output args that are used outside of this routine have the right scope
@@ -553,14 +621,14 @@ contains
       ! inputs
          lm4_model%atm_forc%t_bot, lm4_model%atm_forc%q_bot,  & !! TODO: link q_bot var and tracer field
          lm4_model%atm_forc%u_bot, lm4_model%atm_forc%v_bot,  lm4_model%atm_forc%p_bot, &
-         lm4_model%atm_forc%z_bot, lm4_model%atm_forc%p_surf, lm4_model%From_lnd%t_surf(:,ntile), &
-         lm4_model%From_lnd%t_ca(:,ntile), &
+         lm4_model%atm_forc%z_bot, lm4_model%atm_forc%p_surf, lm4_model%From_lnd%t_surf(:,ntile_types), &
+         lm4_model%From_lnd%t_ca(:,ntile_types), &
       ! inout
          ex_tr_surf(:,isphum),         & !! TODO review using q_bot as surface Q (this is inout).
       ! more inputs
          ex_u_surf, ex_v_surf,             & ! 0s
-         lm4_model%From_lnd%rough_mom(:,ntile), lm4_model%From_lnd%rough_heat(:,ntile), &
-         ex_rough_moist, lm4_model%From_lnd%rough_scale(:,ntile),   &
+         lm4_model%From_lnd%rough_mom(:,ntile_types), lm4_model%From_lnd%rough_heat(:,ntile_types), &
+         ex_rough_moist, lm4_model%From_lnd%rough_scale(:,ntile_types),   &
          lm4_model%atm_forc%gust,                                                       & ! gustiness
       ! outputs
          ex_flux_t, ex_flux_tr(:,isphum), ex_flux_lw,   &
@@ -584,12 +652,12 @@ contains
          ex_u_star, ex_b_star, ex_q_star,        &
          ex_del_m, ex_del_h, ex_del_q, ex_avail  )
 
-      do l = lnd%ls,lnd%le
-         ex_u10(l) = 0.
-         if(ex_avail(l)) then
-            ex_ref_u(l) = ex_u_surf(l) + (lm4_model%atm_forc%u_bot(l)-ex_u_surf(l)) * ex_del_m(l)
-            ex_ref_v(l) = ex_v_surf(l) + (lm4_model%atm_forc%v_bot(l)-ex_v_surf(l)) * ex_del_m(l)
-            ex_u10(l) = sqrt(ex_ref_u(l)**2 + ex_ref_v(l)**2)
+      do k = 1, ntiles_lnd
+         ex_u10(k) = 0.
+         if(ex_avail(k)) then
+            ex_ref_u(k) = ex_u_surf(k) + (lm4_model%atm_forc%u_bot(k)-ex_u_surf(k)) * ex_del_m(k)
+            ex_ref_v(k) = ex_v_surf(k) + (lm4_model%atm_forc%v_bot(k)-ex_v_surf(k)) * ex_del_m(k)
+            ex_u10(k) = sqrt(ex_ref_u(k)**2 + ex_ref_v(k)**2)
          endif
       enddo
 
@@ -613,18 +681,18 @@ contains
 
       ! TODO: need "fill derivatives for all tracers" block?
 
-      do l = lnd%ls,lnd%le
-         if(ex_avail(l)) ex_drag_q(l) = ex_wind(l)*ex_cd_q(l)
+      do k = 1, ntiles_lnd
+         if(ex_avail(k)) ex_drag_q(k) = ex_wind(k)*ex_cd_q(k)
          ! [6] get mean quantities on atmosphere grid
          ! [6.1] compute t surf for radiation
-         ex_t_surf4(l) = ex_t_surf(l) ** 4
+         ex_t_surf4(k) = ex_t_surf(k) ** 4
       enddo
 
       ! ignore '_fix' albedos in original code, just send land albedos for export
-      lm4_model%atm_sfc%albedo_vis_dir = lm4_model%From_lnd%albedo_vis_dir(:,ntile)
-      lm4_model%atm_sfc%albedo_nir_dir = lm4_model%From_lnd%albedo_nir_dir(:,ntile)
-      lm4_model%atm_sfc%albedo_vis_dif = lm4_model%From_lnd%albedo_vis_dif(:,ntile)
-      lm4_model%atm_sfc%albedo_nir_dif = lm4_model%From_lnd%albedo_nir_dif(:,ntile)      
+      lm4_model%atm_sfc%albedo_vis_dir = lm4_model%From_lnd%albedo_vis_dir(:,ntile_types)
+      lm4_model%atm_sfc%albedo_nir_dir = lm4_model%From_lnd%albedo_nir_dir(:,ntile_types)
+      lm4_model%atm_sfc%albedo_vis_dif = lm4_model%From_lnd%albedo_vis_dif(:,ntile_types)
+      lm4_model%atm_sfc%albedo_nir_dif = lm4_model%From_lnd%albedo_nir_dif(:,ntile_types)      
 
       ! TODO: convert these from  xgrid and Land_Ice_Atmos_Boundary to atmos_land_boundary_type?
       ! [6.2] put relevant quantities onto atmospheric boundary
@@ -774,7 +842,7 @@ contains
 
       ! local variables
 
-      real, dimension(lnd%ls:lnd%le) :: &
+      real, dimension(ntiles_lnd) :: &
          ex_flux_sw, ex_flux_lwd, &
          ex_flux_sw_dir,  &
          ex_flux_sw_dif,  &
@@ -787,7 +855,7 @@ contains
          ex_dtmass, ex_gamma, &
          ex_delta_t, ex_dflux_t, ex_e_q_n
 
-      real, dimension(lnd%ls:lnd%le,ntcana) ::  &
+      real, dimension(ntiles_lnd,ntcana) ::  &
          ex_dflux_tr, & ! tracer flux change. TODO: NEED TO FETCH
          ex_delta_tr ! tracer tendencies. TODO: NEED TO FETCH
 
@@ -829,91 +897,90 @@ contains
       end if         
 
 
-      do l = lnd%ls,lnd%le
+      do k = 1, ntiles_lnd
          !----- compute net longwave flux (down-up) -----
          ! (note: lw up already in ex_flux_lw)
-         ex_flux_lw(l) = ex_flux_lwd(l) - ex_flux_lw(l)  ! TODO: review if needed
+         ex_flux_lw(k) = ex_flux_lwd(k) - ex_flux_lw(k)  ! TODO: review if needed
 
          ! temperature
-         ex_gamma(l)      =  1./ (1.0 - ex_dtmass(l)*(ex_dflux_t(l) + ex_dhdt_atm(l)*cp_inv))
-         ex_e_t_n(l)      =  ex_dtmass(l)*ex_dhdt_surf(l)*cp_inv*ex_gamma(l)
-         ex_f_t_delt_n(l) = (ex_delta_t(l) + ex_dtmass(l) * ex_flux_t(l)*cp_inv) * ex_gamma(l)
+         ex_gamma(k)      =  1./ (1.0 - ex_dtmass(k)*(ex_dflux_t(k) + ex_dhdt_atm(k)*cp_inv))
+         ex_e_t_n(k)      =  ex_dtmass(k)*ex_dhdt_surf(k)*cp_inv*ex_gamma(k)
+         ex_f_t_delt_n(k) = (ex_delta_t(k) + ex_dtmass(k) * ex_flux_t(k)*cp_inv) * ex_gamma(k)
 
-         ex_flux_t (l)    =  ex_flux_t(l)        + ex_dhdt_atm(l) * ex_f_t_delt_n(l)
-         ex_dhdt_surf(l)  =  ex_dhdt_surf(l)     + ex_dhdt_atm(l) * ex_e_t_n(l)
-
+         ex_flux_t (k)    =  ex_flux_t(k)        + ex_dhdt_atm(k) * ex_f_t_delt_n(k)
+         ex_dhdt_surf(k)  =  ex_dhdt_surf(k)     + ex_dhdt_atm(k) * ex_e_t_n(k)
 
          ! moisture
 
          ! moisture vs. surface temperture, assuming saturation
-         ex_gamma(l)   =  1.0 / (1.0 - ex_dtmass(l)*(ex_dflux_tr(l,isphum) + ex_dfdtr_atm(l,isphum)))
-         ex_e_q_n(l)      =  ex_dtmass(l) * ex_dedt_surf(l) * ex_gamma(l)
-         ex_dedt_surf(l)  =  ex_dedt_surf(l) + ex_dfdtr_atm(l,isphum) * ex_e_q_n(l)
+         ex_gamma(k)   =  1.0 / (1.0 - ex_dtmass(k)*(ex_dflux_tr(k,isphum) + ex_dfdtr_atm(k,isphum)))
+         ex_e_q_n(k)      =  ex_dtmass(k) * ex_dedt_surf(k) * ex_gamma(k)
+         ex_dedt_surf(k)  =  ex_dedt_surf(k) + ex_dfdtr_atm(k,isphum) * ex_e_q_n(k)
          ! original code uses n_exch_tr instead of ntcana
          do tr = 1,ntcana
-            ex_gamma(l)   =  1.0 / (1.0 - ex_dtmass(l)*(ex_dflux_tr(l,tr) + ex_dfdtr_atm(l,tr)))
+            ex_gamma(k)   =  1.0 / (1.0 - ex_dtmass(k)*(ex_dflux_tr(k,tr) + ex_dfdtr_atm(k,tr)))
 
-            ex_e_tr_n(l,tr)      =  ex_dtmass(l)*ex_dfdtr_surf(l,tr)*ex_gamma(l)
-            ex_f_tr_delt_n(l,tr) = (ex_delta_tr(l,tr)+ex_dtmass(l)*ex_flux_tr(l,tr))*ex_gamma(l)
+            ex_e_tr_n(k,tr)      =  ex_dtmass(k)*ex_dfdtr_surf(k,tr)*ex_gamma(k)
+            ex_f_tr_delt_n(k,tr) = (ex_delta_tr(k,tr)+ex_dtmass(k)*ex_flux_tr(k,tr))*ex_gamma(k)
 
-            ex_flux_tr(l,tr)     =  ex_flux_tr(l,tr) + ex_dfdtr_atm(l,tr)*ex_f_tr_delt_n(l,tr)
-            ex_dfdtr_surf(l,tr)  =  ex_dfdtr_surf(l,tr) + ex_dfdtr_atm(l,tr)*ex_e_tr_n(l,tr)
+            ex_flux_tr(k,tr)     =  ex_flux_tr(k,tr) + ex_dfdtr_atm(k,tr)*ex_f_tr_delt_n(k,tr)
+            ex_dfdtr_surf(k,tr)  =  ex_dfdtr_surf(k,tr) + ex_dfdtr_atm(k,tr)*ex_e_tr_n(k,tr)
          enddo
       enddo
 
       ! send to land boundary
 
-      lm4_model%From_atm%t_flux(:,ntile)                  = ex_flux_t
-      lm4_model%From_atm%sw_flux(:,ntile)                 = ex_flux_sw
-      lm4_model%From_atm%sw_flux_down_vis_dir(:,ntile)    = ex_flux_sw_down_vis_dir
-      lm4_model%From_atm%sw_flux_down_total_dir(:,ntile)  = ex_flux_sw_down_total_dir
-      lm4_model%From_atm%sw_flux_down_vis_dif(:,ntile)    = ex_flux_sw_down_vis_dif
-      lm4_model%From_atm%sw_flux_down_total_dif(:,ntile)  = ex_flux_sw_down_total_dif
+      lm4_model%From_atm%t_flux(:,ntile_types)                  = ex_flux_t
+      lm4_model%From_atm%sw_flux(:,ntile_types)                 = ex_flux_sw
+      lm4_model%From_atm%sw_flux_down_vis_dir(:,ntile_types)    = ex_flux_sw_down_vis_dir
+      lm4_model%From_atm%sw_flux_down_total_dir(:,ntile_types)  = ex_flux_sw_down_total_dir
+      lm4_model%From_atm%sw_flux_down_vis_dif(:,ntile_types)    = ex_flux_sw_down_vis_dif
+      lm4_model%From_atm%sw_flux_down_total_dif(:,ntile_types)  = ex_flux_sw_down_total_dif
       ! TODO: review if is this net LW needed by land?
-      ! lm4_model%From_atm%lw_flux(:,ntile)                 = ex_flux_lw
-      lm4_model%From_atm%dhdt(:,ntile)                    = ex_dhdt_surf
-      lm4_model%From_atm%drdt(:,ntile)                    = ex_drdt_surf
+      ! lm4_model%From_atm%lw_flux(:,ntile_types)                 = ex_flux_lw
+      lm4_model%From_atm%dhdt(:,ntile_types)                    = ex_dhdt_surf
+      lm4_model%From_atm%drdt(:,ntile_types)                    = ex_drdt_surf
       ! TODO: review if should replace with wider scope versions of ex_p_surf, ex_lprec, ex_fprec
-      lm4_model%From_atm%p_surf(:,ntile) = lm4_model%atm_forc%p_surf !ex_p_surf
-      lm4_model%From_atm%lprec(:,ntile)  = lm4_model%atm_forc%lprec !ex_lprec
-      lm4_model%From_atm%fprec(:,ntile)  = lm4_model%atm_forc%fprec !ex_fprec
+      lm4_model%From_atm%p_surf(:,ntile_types) = lm4_model%atm_forc%p_surf !ex_p_surf
+      lm4_model%From_atm%lprec(:,ntile_types)  = lm4_model%atm_forc%lprec !ex_lprec
+      lm4_model%From_atm%fprec(:,ntile_types)  = lm4_model%atm_forc%fprec !ex_fprec
 
       ! set Land's precipitation temperature to atmosphere's temperature
-      lm4_model%From_atm%tprec(:,ntile) = lm4_model%atm_forc%t_bot
+      lm4_model%From_atm%tprec(:,ntile_types) = lm4_model%atm_forc%t_bot
 
       ! TODO: review scope of these
       ! These originally had data overrides
       if(associated(lm4_model%From_atm%drag_q)) then
-         lm4_model%From_atm%drag_q(:,ntile) = ex_drag_q
+         lm4_model%From_atm%drag_q(:,ntile_types) = ex_drag_q
       endif
       if(associated(lm4_model%From_atm%lwdn_flux)) then
-         lm4_model%From_atm%lwdn_flux(:,ntile) = ex_flux_lwd
+         lm4_model%From_atm%lwdn_flux(:,ntile_types) = ex_flux_lwd
       endif
       if(associated(lm4_model%From_atm%cd_m)) then
-         lm4_model%From_atm%cd_m(:,ntile) = ex_cd_m
+         lm4_model%From_atm%cd_m(:,ntile_types) = ex_cd_m
       endif
       if(associated(lm4_model%From_atm%cd_t)) then
-         lm4_model%From_atm%cd_t(:,ntile) = ex_cd_t
+         lm4_model%From_atm%cd_t(:,ntile_types) = ex_cd_t
       endif
       if(associated(lm4_model%From_atm%bstar)) then
-         lm4_model%From_atm%bstar(:,ntile) = ex_b_star
+         lm4_model%From_atm%bstar(:,ntile_types) = ex_b_star
       endif
       if(associated(lm4_model%From_atm%ustar)) then
-         lm4_model%From_atm%ustar(:,ntile) = ex_u_star
+         lm4_model%From_atm%ustar(:,ntile_types) = ex_u_star
       endif
       if(associated(lm4_model%From_atm%wind)) then
-         lm4_model%From_atm%wind(:,ntile) = ex_wind
+         lm4_model%From_atm%wind(:,ntile_types) = ex_wind
       endif
       if(associated(lm4_model%From_atm%z_bot)) then
-         lm4_model%From_atm%z_bot(:,ntile) = ex_z_atm
+         lm4_model%From_atm%z_bot(:,ntile_types) = ex_z_atm
       endif
 
 
       lm4_model%From_atm%tr_flux = 0.0
       lm4_model%From_atm%dfdtr = 0.0
       do tr = 1,ntcana
-         lm4_model%From_atm%tr_flux(:,ntile,tr) = ex_flux_tr(:,tr)
-         lm4_model%From_atm%dfdtr(:,ntile,tr)   = ex_dfdtr_surf(:,tr)
+         lm4_model%From_atm%tr_flux(:,ntile_types,tr) = ex_flux_tr(:,tr)
+         lm4_model%From_atm%dfdtr(:,ntile_types,tr)   = ex_dfdtr_surf(:,tr)
       enddo
 
    end subroutine flux_down_from_atmos
@@ -929,7 +996,7 @@ contains
       use constants_mod, only : hlv, cp_air
       type(lm4_type),        intent(inout)  :: lm4_model ! land model's variable type
 
-      real, dimension(lnd%ls:lnd%le) :: &
+      real, dimension(ntiles_lnd) :: &
          ex_t_surf_new, &
          ex_dt_t_surf,  &
          ex_delta_t_n,  &         
@@ -937,7 +1004,7 @@ contains
          ex_dt_t_ca,    &
          rho               ! air density
 
-      real, dimension(lnd%ls:lnd%le,ntcana) ::  &
+      real, dimension(ntiles_lnd,ntcana) ::  &
          ex_tr_surf_new,    & ! updated tracer values at the surface
          ex_dt_tr_surf,     & ! tendency of tracers at the surface
          ex_delta_tr_n
@@ -951,21 +1018,21 @@ contains
       ex_t_ca_new = ex_t_surf_new  ! since it is the same thing over oceans
       ! call put_to_xgrid_land (Land%t_ca,   'LND', ex_t_ca_new,   xmap_sfc)
       ! call put_to_xgrid_land (Land%t_surf, 'LND', ex_t_surf_new, xmap_sfc)
-      ex_t_surf_new = lm4_model%From_lnd%t_surf(:,ntile)
-      ex_t_ca_new   = lm4_model%From_lnd%t_ca(:,ntile)
+      ex_t_surf_new = lm4_model%From_lnd%t_surf(:,ntile_types)
+      ex_t_ca_new   = lm4_model%From_lnd%t_ca(:,ntile_types)
 
-      do l = lnd%ls,lnd%le
-         if(ex_avail(l)) then
-            ex_dt_t_ca(l)  = ex_t_ca_new(l)   - ex_t_ca(l)   ! changes in near-surface T
-            ex_dt_t_surf(l) = ex_t_surf_new(l) - ex_t_surf(l) ! changes in radiative T
+      do k = 1,ntiles_lnd
+         if(ex_avail(k)) then
+            ex_dt_t_ca(k)  = ex_t_ca_new(k)   - ex_t_ca(k)   ! changes in near-surface T
+            ex_dt_t_surf(k) = ex_t_surf_new(k) - ex_t_surf(k) ! changes in radiative T
          endif
       enddo
 
       if (do_forecast) then
-         do l = lnd%ls,lnd%le
-               if(ex_avail(l) .and. (.not.ex_land(l))) then
-                  ex_dt_t_ca  (l) = 0.
-                  ex_dt_t_surf(l) = 0.
+         do k = 1,ntiles_lnd
+               if(ex_avail(k) .and. (.not.ex_land(k))) then
+                  ex_dt_t_ca  (k) = 0.
+                  ex_dt_t_surf(k) = 0.
                endif
          enddo
       end if
@@ -977,30 +1044,30 @@ contains
       do tr = 1,ntcana
          ! set up updated surface tracer field so that flux to atmos for absent
          ! tracers is zero
-         do l = lnd%ls,lnd%le
-            if(.not.ex_avail(l)) cycle
-            if (ex_dfdtr_surf(l,tr)/=0.0) then
-               ex_dt_tr_surf(l,tr) = -ex_flux_tr(l,tr)/ex_dfdtr_surf(l,tr)
+         do k = 1, ntiles_lnd
+            if(.not.ex_avail(k)) cycle
+            if (ex_dfdtr_surf(k,tr)/=0.0) then
+               ex_dt_tr_surf(k,tr) = -ex_flux_tr(k,tr)/ex_dfdtr_surf(k,tr)
             else
-               ex_dt_tr_surf(l,tr) = 0.0
+               ex_dt_tr_surf(k,tr) = 0.0
             endif
-               ex_tr_surf_new(l,tr) = ex_tr_surf(l,tr)+ex_dt_tr_surf(l,tr)
+               ex_tr_surf_new(k,tr) = ex_tr_surf(k,tr)+ex_dt_tr_surf(k,tr)
             enddo
       enddo
       
       ! TODO: review
       ! get all tracers available from land, and calculate changes in near-tracer field
       do tr = 1,ntcana
-         ex_tr_surf_new(:,tr) = lm4_model%From_lnd%tr(:,ntile,tr)
+         ex_tr_surf_new(:,tr) = lm4_model%From_lnd%tr(:,ntile_types,tr)
       enddo
 
       ! update tracer tendencies in the atmosphere
       do tr = 1,ntcana
-         do l = lnd%ls,lnd%le
-            if(ex_avail(l)) then
-               ex_dt_tr_surf(l,tr) = ex_tr_surf_new(l,tr) - ex_tr_surf(l,tr)
-               ex_delta_tr_n(l,tr) = ex_f_tr_delt_n(l,tr) + ex_dt_tr_surf(l,tr) * ex_e_tr_n(l,tr)
-               ex_flux_tr(l,tr)    = ex_flux_tr(l,tr)     + ex_dt_tr_surf(l,tr) * ex_dfdtr_surf(l,tr)
+         do k = 1,ntiles_lnd
+            if(ex_avail(k)) then
+               ex_dt_tr_surf(k,tr) = ex_tr_surf_new(k,tr) - ex_tr_surf(k,tr)
+               ex_delta_tr_n(k,tr) = ex_f_tr_delt_n(k,tr) + ex_dt_tr_surf(k,tr) * ex_e_tr_n(k,tr)
+               ex_flux_tr(k,tr)    = ex_flux_tr(k,tr)     + ex_dt_tr_surf(k,tr) * ex_dfdtr_surf(k,tr)
             endif
          enddo
       enddo
@@ -1013,12 +1080,12 @@ contains
       !    ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr(:,:,n), 'ATM', ex_delta_tr_n(:,tr), xmap_sfc)
       ! enddo
 
-      do l = lnd%ls,lnd%le
-         ex_delta_t_n(l) = 0.0
-         if(ex_avail(l)) then
-            ex_flux_t(l)    = ex_flux_t(l)  + ex_dt_t_ca(l)   * ex_dhdt_surf(l)
-            ex_flux_lw(l)   = ex_flux_lw(l) - ex_dt_t_surf(l) * ex_drdt_surf(l)
-            ex_delta_t_n(l) = ex_f_t_delt_n(l)  + ex_dt_t_ca(l)*ex_e_t_n(l)
+      do k = 1,ntiles_lnd
+         ex_delta_t_n(k) = 0.0
+         if(ex_avail(k)) then
+            ex_flux_t(k)    = ex_flux_t(k)  + ex_dt_t_ca(k)   * ex_dhdt_surf(k)
+            ex_flux_lw(k)   = ex_flux_lw(k) - ex_dt_t_surf(k) * ex_drdt_surf(k)
+            ex_delta_t_n(k) = ex_f_t_delt_n(k)  + ex_dt_t_ca(k)*ex_e_t_n(k)
          endif
       enddo
 
@@ -1432,5 +1499,13 @@ contains
 
    end subroutine end_driver
 
+! ============================================================================
+! tile existence detector: returns a logical value indicating wether component
+! model tile exists or not
+logical function land_tile_exists(tile)
+   use land_tile_mod,      only : land_tile_enum_type, land_tile_type
+  type(land_tile_type), pointer :: tile
+  land_tile_exists = associated(tile)
+end function land_tile_exists
 
 end module lm4_driver
