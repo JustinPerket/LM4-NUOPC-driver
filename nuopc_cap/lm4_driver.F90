@@ -11,6 +11,9 @@ module lm4_driver
    use lm4_kind_mod,         only: r8 => shr_kind_r8, cl=>shr_kind_cl
    use land_data_mod,        only: land_data_type, atmos_land_boundary_type, lnd
    use land_tile_mod,        only : land_tile_map
+   use land_tile_mod,        only : land_tile_enum_type, land_tile_type, &
+                                     first_elmt, loop_over_tiles, max_n_tiles, &
+                                     nitems, tile_exists_func
    use land_tracers_mod,     only: isphum, ico2, ntcana
    use lm4_surface_flux_mod, only: lm4_surface_flux_1d, virtual_temp, air_density
 
@@ -64,9 +67,17 @@ module lm4_driver
    ! variables for between subroutines
 
    integer, allocatable :: tidx(:)     ! land tile indices for current domain
+   integer, allocatable :: inv_tidx(:) ! inverse indexing for land tiles
    integer              :: ntiles_lnd  ! number of land tiles in current domain
    integer              :: ntile_types ! number of land tile types in current domain
-   integer              :: k           ! loop index for land tiles
+   integer              :: k           ! local loop index for land tiles
+   integer              :: kk          ! global loop index for land tiles
+   integer              :: l           ! land gridcell index
+   integer              :: i, j        ! land gridcell indices
+
+   type(land_tile_enum_type) :: ce ! tile list enumerator
+   type(land_tile_type), pointer :: tile
+
 
    real, allocatable, dimension(:) :: &
       ex_flux_t, ex_flux_lw,      &
@@ -79,6 +90,7 @@ module lm4_driver
       ex_u_star,     &
       ex_wind,       &
       ex_z_atm,      &
+      ex_p_surf,     &
       ex_t_surf,     &
       ex_t_ca,       &
       ex_f_t_delt_n, &   
@@ -241,9 +253,7 @@ contains
       use land_domain_mod,    only: domain_create
       use block_control_mod,  only: block_control_type, define_blocks_packed
       !use land_restart_mod,   only: sfc_prop_restart_read, sfc_prop_transfer
-      use land_tile_mod,      only : land_tile_enum_type, land_tile_type, &
-                                     first_elmt, loop_over_tiles, max_n_tiles, &
-                                     nitems, tile_exists_func
+
       use land_tile_io_mod,   only : gather_tile_index
                            
 
@@ -256,9 +266,6 @@ contains
       !logical, save                       :: block_message = .true.
 
       ! JP TMP
-      type(land_tile_enum_type) :: ce ! tile list enumerator
-      type(land_tile_type), pointer :: tile
-      integer :: i, j, l
       integer :: numtiles ! number of tiles in gridcell
       procedure(tile_exists_func) :: tile_exists ! existence detector function:
 
@@ -269,6 +276,12 @@ contains
       call domain_create(lm4_model%nml, land_domain)
 
       call mpp_get_compute_domain(land_domain,isc,iec,jsc,jec)
+
+      ! this gives land tiles same compressed indexing as in LM4 IO
+      call gather_tile_index(land_tile_exists, tidx)
+      ntiles_lnd = size(tidx)
+      write(logmsg, '(A,I4)') 'init_driver number of land tiles = ', ntiles_lnd
+      call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
 
       allocate( &
          ex_flux_t(ntiles_lnd), ex_flux_lw(ntiles_lnd),   &
@@ -281,6 +294,7 @@ contains
          ex_u_star(ntiles_lnd),     &
          ex_wind(ntiles_lnd),       &
          ex_z_atm(ntiles_lnd),      &
+         ex_p_surf(ntiles_lnd),     &
          ex_t_surf(ntiles_lnd),     &
          ex_t_ca(ntiles_lnd),       &
          ex_f_t_delt_n(ntiles_lnd), &   
@@ -314,6 +328,7 @@ contains
       ex_u_star     = 0.0_r8
       ex_wind       = 0.0_r8
       ex_z_atm      = 0.0_r8
+      ex_p_surf     = 0.0_r8
       ex_t_surf     = 0.0_r8
       ex_t_ca       = 0.0_r8
       ex_f_t_delt_n = 0.0_r8
@@ -379,11 +394,6 @@ contains
       write(logmsg, '(A,I4)') 'init_driver max number of land tile types = ', ntile_types
       call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
 
-      call gather_tile_index(land_tile_exists, tidx)
-      ntiles_lnd = size(tidx)
-      write(logmsg, '(A,I4)') 'init_driver number of land tiles = ', ntiles_lnd
-      call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
       ! ! count all land tiles and determine the length of tile dimension
       ! ! sufficient for the current domain
       ! numtiles = 0
@@ -399,13 +409,22 @@ contains
       ! call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
 
 
-      ! JP TMP: test tile looping     
-      do k = 1, ntiles_lnd
-         write(logmsg, '(A,I8)') ' tile index = ', tidx(k)
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
-      enddo
+      ! ! create inverse idexing for land tiles if needed
+      ! allocate(inv_tidx(ntiles_lnd))
+      ! do kk = 1, ntiles_lnd
+      !    inv_tidx(tidx(kk)) = kk
+      ! enddo
       
+
+      ! ! JP TMP: test tile looping     
+      ! do k = 1, ntiles_lnd
+      !    write(logmsg, '(A,3I8)') ' k,tile index = ', k, tidx(k), inv_tidx(tidx(k))
+      !    call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+         
+      ! enddo
+      
+
+
       ce = first_elmt(land_tile_map, ls=lnd%ls)
       ! do while(loop_over_tiles(ce, tile, l,k))   
       do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))   
@@ -523,7 +542,11 @@ contains
 
 
       integer :: tr, n, m ! tracer indices
-      integer :: l
+
+      ! JP TMP
+      type(land_tile_enum_type) :: ce ! tile list enumerator
+      type(land_tile_type), pointer :: tile
+      integer :: i, j, l, kk, k, ll
 
 
 
@@ -534,34 +557,77 @@ contains
       ex_u_surf = 0.0
       ex_v_surf = 0.0
 
-      ! prefill q_surf with q_bot. In original code, there were options to send/write
-      ! before surface_flux call.
-      ex_tr_surf(:,isphum) = lm4_model%atm_forc%q_bot
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      kk = 0  ! global tile index
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
+         kk = kk + 1      
+         ! prefill q_surf with q_bot. In original code, there were options to send/write
+         ! before surface_flux call.
+         ex_tr_surf(kk,isphum) = lm4_model%atm_forc%q_bot(l)
 
-      ! TODO: review
-      do tr = 1,ntcana
-         ex_tr_surf(:,tr) = lm4_model%From_lnd%tr(:,ntile_types,tr)
-      enddo
+         ! TODO: review
+         do tr = 1,ntcana
+            ex_tr_surf(kk,tr) = lm4_model%From_lnd%tr(l,k,tr)
+         enddo
+      end do
 
-      ex_t_atm  = lm4_model%atm_forc%t_bot
-      ex_q_atm  = lm4_model%atm_forc%q_bot
-      ex_u_atm  = lm4_model%atm_forc%u_bot
-      ex_v_atm  = lm4_model%atm_forc%v_bot
-      ex_p_atm  = lm4_model%atm_forc%p_bot
-      ex_z_atm  = lm4_model%atm_forc%z_bot
-      ex_p_surf = lm4_model%atm_forc%p_surf
-      ex_gust   = lm4_model%atm_forc%gust
+      ! ! loop over land gridcells to distrubute across tiles in each gridcell
+      ! call ESMF_LogWrite('JP: looping over land gridcells and tiles', ESMF_LOGMSG_INFO)
+      ! do ll = lnd%ls,lnd%le
+      !    ce = first_elmt(land_tile_map(ll))
+      !    k = 0       
+      !    do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))   
+      !       write(logmsg, '(A,5I4)') 'sfb LM4 loop ll, i,j,l,k = ', ll, i,j,l,k
+      !       call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+      !       ! ex_t_atm(k) = lm4_model%atm_forc%t_bot(ll)
+      !    end do
+      ! end do
+      ! call ESMF_LogWrite('JP: end looping over land gridcells and tiles', ESMF_LOGMSG_INFO)
+
+      call ESMF_LogWrite('JP: looping over tiles', ESMF_LOGMSG_INFO)
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      kk = 0  ! global tile index
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
+         kk = kk + 1
+         write(logmsg, '(A,5I4)') 'sfb LM4 loop 2 kk, i,j,l,k = ', kk, i,j,l,k
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+
+         ! ok, now actaually fill in tile data from gridcell data
+         ex_t_atm(kk)  = lm4_model%atm_forc%t_bot(l)
+         ex_q_atm(kk)  = lm4_model%atm_forc%q_bot(l)
+         ex_u_atm(kk)  = lm4_model%atm_forc%u_bot(l)
+         ex_v_atm(kk)  = lm4_model%atm_forc%v_bot(l)
+         ex_p_atm(kk)  = lm4_model%atm_forc%p_bot(l)
+         ex_z_atm(kk)  = lm4_model%atm_forc%z_bot(l)
+         ex_p_surf(kk) = lm4_model%atm_forc%p_surf(l)
+         ex_gust(kk)   = lm4_model%atm_forc%gust(l)
+      end do
+
+      call sleep(10)
+      write(logmsg, '(A,2I8)') 'JP: number of tiles filled = ', kk, ntiles_lnd
+      call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+
+      ! sleep for 10 seconds to allow log messages to be written in order
+      call sleep(10)
 
 
-      ! this is mimicking the original code for land roughness vars
-      ! TODO: review and optimize
-      ex_rough_mom   = lm4_model%From_lnd%rough_mom(:,ntile_types)
-      ex_rough_moist = lm4_model%From_lnd%rough_heat(:,ntile_types)
-      ex_rough_heat  = lm4_model%From_lnd%rough_heat(:,ntile_types)
-      ex_rough_scale = lm4_model%From_lnd%rough_scale(:,ntile_types)
+      kk = 0  ! global tile index
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
 
-      ex_t_surf = lm4_model%From_lnd%t_surf(:,ntile_types)
-      ex_t_ca   = lm4_model%From_lnd%t_ca(:,ntile_types)
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
+         kk = kk + 1
+         write(logmsg, '(A,5I4)') 'sfb LM4 loop 3 kk, i,j,l,k = ', kk, i,j,l,k
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)      
+
+         ! this is mimicking the original code for land roughness vars
+         ex_rough_mom(kk)   = lm4_model%From_lnd%rough_mom(l,k)
+         ex_rough_moist(kk) = lm4_model%From_lnd%rough_heat(l,k)
+         ex_rough_heat(kk)  = lm4_model%From_lnd%rough_heat(l,k)
+         ex_rough_scale(kk) = lm4_model%From_lnd%rough_scale(l,k)
+
+         ex_t_surf(kk) = lm4_model%From_lnd%t_surf(l,k)
+         ex_t_ca(kk)   = lm4_model%From_lnd%t_ca(l,k)
+      end do
 
 
       ! initialize other variables to zero
@@ -606,30 +672,24 @@ contains
       ! call send_tile_data(iug_gust       , ex_gust       )
 
 
-      ! testing: loop over tiles
-      do k = 1, ntiles_lnd
-         ex_test_foo(k) = real(k)
-         write(logmsg, '(A,I4,F8.2)') 'sfc_boundary_layer tile loop k = ', k, ex_test_foo(k)
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-      enddo
-      ! end testing
 
 
 
-      !1 TODO: make sure output args that are used outside of this routine have the right scope
+      !! TODO: blocking not used for now
+      !! TODO: make sure output args that are used outside of this routine have the right scope
       call lm4_surface_flux_1d ( &
       ! inputs
-         lm4_model%atm_forc%t_bot, lm4_model%atm_forc%q_bot,  & !! TODO: link q_bot var and tracer field
-         lm4_model%atm_forc%u_bot, lm4_model%atm_forc%v_bot,  lm4_model%atm_forc%p_bot, &
-         lm4_model%atm_forc%z_bot, lm4_model%atm_forc%p_surf, lm4_model%From_lnd%t_surf(:,ntile_types), &
-         lm4_model%From_lnd%t_ca(:,ntile_types), &
+         ex_t_atm, ex_q_atm,  & !! TODO: link q_bot var and tracer field
+         ex_u_atm, ex_v_atm,  ex_p_atm, &
+         ex_z_atm, ex_p_surf, ex_t_surf, &
+         ex_t_ca, &
       ! inout
          ex_tr_surf(:,isphum),         & !! TODO review using q_bot as surface Q (this is inout).
       ! more inputs
          ex_u_surf, ex_v_surf,             & ! 0s
-         lm4_model%From_lnd%rough_mom(:,ntile_types), lm4_model%From_lnd%rough_heat(:,ntile_types), &
-         ex_rough_moist, lm4_model%From_lnd%rough_scale(:,ntile_types),   &
-         lm4_model%atm_forc%gust,                                                       & ! gustiness
+         ex_rough_mom, ex_rough_heat, &
+         ex_rough_moist, ex_rough_scale,   &
+         ex_gust,                                                       & ! gustiness
       ! outputs
          ex_flux_t, ex_flux_tr(:,isphum), ex_flux_lw,   &
          ex_flux_u, ex_flux_v, ex_cd_m,   ex_cd_t, &
@@ -655,8 +715,8 @@ contains
       do k = 1, ntiles_lnd
          ex_u10(k) = 0.
          if(ex_avail(k)) then
-            ex_ref_u(k) = ex_u_surf(k) + (lm4_model%atm_forc%u_bot(k)-ex_u_surf(k)) * ex_del_m(k)
-            ex_ref_v(k) = ex_v_surf(k) + (lm4_model%atm_forc%v_bot(k)-ex_v_surf(k)) * ex_del_m(k)
+            ex_ref_u(k) = ex_u_surf(k) + (ex_u_atm(k)-ex_u_surf(k)) * ex_del_m(k)
+            ex_ref_v(k) = ex_v_surf(k) + (ex_v_atm(k)-ex_v_surf(k)) * ex_del_m(k)
             ex_u10(k) = sqrt(ex_ref_u(k)**2 + ex_ref_v(k)**2)
          endif
       enddo
@@ -688,6 +748,7 @@ contains
          ex_t_surf4(k) = ex_t_surf(k) ** 4
       enddo
 
+      !! TODO: aggregate back to gridcell (or aggregate fluxes?)
       ! ignore '_fix' albedos in original code, just send land albedos for export
       lm4_model%atm_sfc%albedo_vis_dir = lm4_model%From_lnd%albedo_vis_dir(:,ntile_types)
       lm4_model%atm_sfc%albedo_nir_dir = lm4_model%From_lnd%albedo_nir_dir(:,ntile_types)
@@ -929,24 +990,39 @@ contains
       enddo
 
       ! send to land boundary
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
+         kk = kk + 1
+         write(logmsg, '(A,5I4)') 'sfb LM4 flux_down_from_atmos loop kk, i,j,l,k = ', kk, i,j,l,k  
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
 
-      lm4_model%From_atm%t_flux(:,ntile_types)                  = ex_flux_t
-      lm4_model%From_atm%sw_flux(:,ntile_types)                 = ex_flux_sw
-      lm4_model%From_atm%sw_flux_down_vis_dir(:,ntile_types)    = ex_flux_sw_down_vis_dir
-      lm4_model%From_atm%sw_flux_down_total_dir(:,ntile_types)  = ex_flux_sw_down_total_dir
-      lm4_model%From_atm%sw_flux_down_vis_dif(:,ntile_types)    = ex_flux_sw_down_vis_dif
-      lm4_model%From_atm%sw_flux_down_total_dif(:,ntile_types)  = ex_flux_sw_down_total_dif
-      ! TODO: review if is this net LW needed by land?
-      ! lm4_model%From_atm%lw_flux(:,ntile_types)                 = ex_flux_lw
-      lm4_model%From_atm%dhdt(:,ntile_types)                    = ex_dhdt_surf
-      lm4_model%From_atm%drdt(:,ntile_types)                    = ex_drdt_surf
-      ! TODO: review if should replace with wider scope versions of ex_p_surf, ex_lprec, ex_fprec
-      lm4_model%From_atm%p_surf(:,ntile_types) = lm4_model%atm_forc%p_surf !ex_p_surf
-      lm4_model%From_atm%lprec(:,ntile_types)  = lm4_model%atm_forc%lprec !ex_lprec
-      lm4_model%From_atm%fprec(:,ntile_types)  = lm4_model%atm_forc%fprec !ex_fprec
+         lm4_model%From_atm%t_flux(l,k)                  = ex_flux_t(kk)
+         lm4_model%From_atm%sw_flux(l,k)                 = ex_flux_sw(kk)
+         lm4_model%From_atm%sw_flux_down_vis_dir(l,k)    = ex_flux_sw_down_vis_dir(kk)
+         lm4_model%From_atm%sw_flux_down_total_dir(l,k)  = ex_flux_sw_down_total_dir(kk)
+         lm4_model%From_atm%sw_flux_down_vis_dif(l,k)    = ex_flux_sw_down_vis_dif(kk)
+         lm4_model%From_atm%sw_flux_down_total_dif(l,k)  = ex_flux_sw_down_total_dif(kk)  
 
-      ! set Land's precipitation temperature to atmosphere's temperature
-      lm4_model%From_atm%tprec(:,ntile_types) = lm4_model%atm_forc%t_bot
+         ! TODO: review if is this net LW needed by land?
+         ! lm4_model%From_atm%lw_flux(l,k)                 = ex_flux_lw(kk)
+         lm4_model%From_atm%dhdt(l,k)                   = ex_dhdt_surf(kk)
+         lm4_model%From_atm%drdt(l,k)                   = ex_drdt_surf(kk)
+
+         ! TODO: review if should replace with wider scope versions of ex_p_surf, ex_lprec, ex_fprec
+         lm4_model%From_atm%p_surf(l,k) = ex_p_surf(kk) !ex_p_surf
+
+         ! for a given grid index, distribute precipitation to its tiles
+         lm4_model%From_atm%lprec(l,k)  = lm4_model%atm_forc%lprec(l) !ex_lprec
+         lm4_model%From_atm%fprec(l,k)  = lm4_model%atm_forc%fprec(l) !ex_fprec
+         ! set Land's precipitation temperature to atmosphere's temperature
+         lm4_model%From_atm%tprec(l,k) = lm4_model%atm_forc%t_bot(l)
+
+      end do
+      
+      
+
+
+
 
       ! TODO: review scope of these
       ! These originally had data overrides
@@ -1488,6 +1564,7 @@ contains
          ex_u_star,     &
          ex_wind,       &
          ex_z_atm,      &
+         ex_p_surf,     &
          ex_avail,      & 
          ex_land,       &
          ex_t_surf,     &
@@ -1499,13 +1576,16 @@ contains
 
    end subroutine end_driver
 
-! ============================================================================
-! tile existence detector: returns a logical value indicating wether component
-! model tile exists or not
-logical function land_tile_exists(tile)
-   use land_tile_mod,      only : land_tile_enum_type, land_tile_type
-  type(land_tile_type), pointer :: tile
-  land_tile_exists = associated(tile)
-end function land_tile_exists
+   ! ============================================================================
+   ! tile existence detector: returns a logical value indicating wether component
+   ! model tile exists or not
+   logical function land_tile_exists(tile)
+      use land_tile_mod,      only : land_tile_enum_type, land_tile_type
+   type(land_tile_type), pointer :: tile
+   land_tile_exists = associated(tile)
+   end function land_tile_exists
 
-end module lm4_driver
+   end module lm4_driver
+
+
+   
