@@ -524,7 +524,6 @@ contains
 
       real, dimension(ntiles_lnd) :: &
          ex_t_surf_miz, &
-         ex_p_surf   ,  &
          ex_q_surf  ,  &
       !ex_slp      ,  &
          ex_dqsatdt_surf,  &
@@ -544,9 +543,7 @@ contains
       integer :: tr, n, m ! tracer indices
 
       ! JP TMP
-      type(land_tile_enum_type) :: ce ! tile list enumerator
-      type(land_tile_type), pointer :: tile
-      integer :: i, j, l, kk, k, ll
+      integer :: ll
 
 
 
@@ -589,8 +586,6 @@ contains
       kk = 0  ! global tile index
       do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
          kk = kk + 1
-         write(logmsg, '(A,5I4)') 'sfb LM4 loop 2 kk, i,j,l,k = ', kk, i,j,l,k
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
 
          ! ok, now actaually fill in tile data from gridcell data
          ex_t_atm(kk)  = lm4_model%atm_forc%t_bot(l)
@@ -601,6 +596,12 @@ contains
          ex_z_atm(kk)  = lm4_model%atm_forc%z_bot(l)
          ex_p_surf(kk) = lm4_model%atm_forc%p_surf(l)
          ex_gust(kk)   = lm4_model%atm_forc%gust(l)
+
+         write(logmsg, '(A,5I4)') 'sfb LM4 loop 2 kk, i,j,l,k = ', kk, i,j,l,k
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+         ! write out   ex_p_surf(kk)
+         write(logmsg, '(A,F10.2)')     '   sfb LM4  ', ex_p_surf(kk) 
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
       end do
 
       call sleep(10)
@@ -707,7 +708,7 @@ contains
       zrefm = z_ref_mom
       zrefh = z_ref_heat
       !      ---- optimize calculation ----
-      call mo_profile ( zrefm, zrefh, lm4_model%atm_forc%z_bot, ex_rough_mom, &
+      call mo_profile ( zrefm, zrefh, ex_z_atm, ex_rough_mom, &
          ex_rough_heat, ex_rough_moist,          &
          ex_u_star, ex_b_star, ex_q_star,        &
          ex_del_m, ex_del_h, ex_del_q, ex_avail  )
@@ -922,7 +923,7 @@ contains
 
       real :: cp_inv
 
-      integer :: l, tr
+      integer :: tr
 
       ! NOTE. Not including here (not needed): 
       ! 1. scale_precip_2d functionality
@@ -932,14 +933,19 @@ contains
       ! 5. Stock changes
       ! 6. data overrides
 
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      kk = 0
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
+         kk = kk + 1
 
-      ex_flux_sw_down_vis_dir   = lm4_model%atm_forc%flux_sw_down_vis_dir
-      ex_flux_sw_down_vis_dif   = lm4_model%atm_forc%flux_sw_down_vis_dif
-      ex_flux_sw_down_total_dir = lm4_model%atm_forc%flux_sw_down_vis_dir + lm4_model%atm_forc%flux_sw_down_nir_dir
-      ex_flux_sw_down_total_dif = lm4_model%atm_forc%flux_sw_down_vis_dif + lm4_model%atm_forc%flux_sw_down_nir_dif
+         ex_flux_sw_down_vis_dir(kk)   = lm4_model%atm_forc%flux_sw_down_vis_dir(l)
+         ex_flux_sw_down_vis_dif(kk)   = lm4_model%atm_forc%flux_sw_down_vis_dif(l)
+         ex_flux_sw_down_total_dir(kk) = lm4_model%atm_forc%flux_sw_down_vis_dir(l) + lm4_model%atm_forc%flux_sw_down_nir_dir(l)
+         ex_flux_sw_down_total_dif(kk) = lm4_model%atm_forc%flux_sw_down_vis_dif(l) + lm4_model%atm_forc%flux_sw_down_nir_dif(l)
 
-      ! TODO: ex_flux_lwd
-      ex_flux_lwd = lm4_model%atm_forc%flux_lw
+         ! TODO: ex_flux_lwd
+         ex_flux_lwd(kk) = lm4_model%atm_forc%flux_lw(l)
+      end do
 
       if (lm4_model%nml%implicit_atm) then
          call ESMF_LogWrite('flux_down_from_atmos: implicit atmosphere coupling not functional', &
@@ -991,6 +997,7 @@ contains
 
       ! send to land boundary
       ce = first_elmt(land_tile_map, ls=lnd%ls)
+      kk = 0
       do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
          kk = kk + 1
          write(logmsg, '(A,5I4)') 'sfb LM4 flux_down_from_atmos loop kk, i,j,l,k = ', kk, i,j,l,k  
@@ -1054,10 +1061,16 @@ contains
 
       lm4_model%From_atm%tr_flux = 0.0
       lm4_model%From_atm%dfdtr = 0.0
-      do tr = 1,ntcana
-         lm4_model%From_atm%tr_flux(:,ntile_types,tr) = ex_flux_tr(:,tr)
-         lm4_model%From_atm%dfdtr(:,ntile_types,tr)   = ex_dfdtr_surf(:,tr)
-      enddo
+
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      kk = 0
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
+         kk = kk + 1
+         do tr = 1,ntcana
+            lm4_model%From_atm%tr_flux(l,k,tr) = ex_flux_tr(kk,tr)
+            lm4_model%From_atm%dfdtr(l,k,tr)   = ex_dfdtr_surf(kk,tr)
+         enddo
+      end do
 
    end subroutine flux_down_from_atmos
 
@@ -1335,7 +1348,6 @@ contains
       logical           :: first_call = .true.
       real              :: missval    = -1.0e+20
       logical           :: used
-      integer           :: i
 
 
       ! only run if first call,
