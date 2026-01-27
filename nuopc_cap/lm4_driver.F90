@@ -10,10 +10,9 @@ module lm4_driver
    use lm4_type_mod,         only: lm4_type
    use lm4_kind_mod,         only: r8 => shr_kind_r8, cl=>shr_kind_cl
    use land_data_mod,        only: land_data_type, atmos_land_boundary_type, lnd
-   use land_tile_mod,        only : land_tile_map
-   use land_tile_mod,        only : land_tile_enum_type, land_tile_type, &
-                                     first_elmt, loop_over_tiles, max_n_tiles, &
-                                     nitems, tile_exists_func
+   use land_tile_mod,        only : land_tile_map, land_tile_enum_type, land_tile_type, &
+                                    first_elmt, loop_over_tiles, max_n_tiles, &
+                                    tile_exists_func
    use land_tracers_mod,     only: isphum, ico2, ntcana
    use lm4_surface_flux_mod, only: lm4_surface_flux_1d, virtual_temp, air_density
 
@@ -67,7 +66,6 @@ module lm4_driver
    ! variables for between subroutines
 
    integer, allocatable :: tidx(:)     ! land tile indices for current domain
-   integer, allocatable :: inv_tidx(:) ! inverse indexing for land tiles
    integer              :: ntiles_lnd  ! number of land tiles in current domain
    integer              :: ntile_types ! number of land tile types in current domain
    integer              :: k           ! local loop index for land tiles
@@ -267,7 +265,6 @@ contains
 
       ! JP TMP
       integer :: numtiles ! number of tiles in gridcell
-      procedure(tile_exists_func) :: tile_exists ! existence detector function:
 
       ! end JP TMP
       integer :: isc, iec, jsc, jec
@@ -277,7 +274,7 @@ contains
 
       call mpp_get_compute_domain(land_domain,isc,iec,jsc,jec)
 
-      ! this gives land tiles same compressed indexing as in LM4 IO
+      ! this gives land tiles same compressed indexing size as in LM4 IO
       call gather_tile_index(land_tile_exists, tidx)
       ntiles_lnd = size(tidx)
       write(logmsg, '(A,I4)') 'init_driver number of land tiles = ', ntiles_lnd
@@ -389,51 +386,23 @@ contains
          call compute_gust(lm4_model)
       endif
 
-
+      
       ntile_types = max_n_tiles()
-      write(logmsg, '(A,I4)') 'init_driver max number of land tile types = ', ntile_types
+      write(logmsg, '(A,I4)') 'LM4 init_driver max number of land tile types = ', ntile_types
       call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
 
-      ! ! count all land tiles and determine the length of tile dimension
-      ! ! sufficient for the current domain
-      ! numtiles = 0
-      ! do l = lnd%ls, lnd%le
-      !    k = nitems(land_tile_map(l))
-      !    numtiles = max(numtiles,k)
-      ! enddo
-      ! write(logmsg, '(A,I4)') 'init_driver 2 number of tiles = ', numtiles
-      ! call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
-      ! call mpp_max(numtiles)
-      ! write(logmsg, '(A,I4)') 'init_driver 3 number of tiles = ', numtiles
-      ! call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
-
-      ! ! create inverse idexing for land tiles if needed
-      ! allocate(inv_tidx(ntiles_lnd))
-      ! do kk = 1, ntiles_lnd
-      !    inv_tidx(tidx(kk)) = kk
-      ! enddo
-      
-
-      ! ! JP TMP: test tile looping     
-      ! do k = 1, ntiles_lnd
-      !    write(logmsg, '(A,3I8)') ' k,tile index = ', k, tidx(k), inv_tidx(tidx(k))
+      ! ce = first_elmt(land_tile_map, ls=lnd%ls)
+      ! do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))   
+      !    write(logmsg, '(A,4I4)') 'init LM4 loop i,j,l,k = ', i,j,l,k
       !    call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-         
       ! enddo
+
+
+      ! JP test of aggregate_land_tiles
+      call test_aggregate_land_tiles()
+      ! end JP test
+
       
-
-
-      ce = first_elmt(land_tile_map, ls=lnd%ls)
-      ! do while(loop_over_tiles(ce, tile, l,k))   
-      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))   
-         ! write out: "init_driver tile loop tile,i,j,l,k = ", tile,i,j,l,k
-         write(logmsg, '(A,4I4)') 'init LM4 loop i,j,l,k = ', i,j,l,k
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-      enddo
-      ! end JP TMP
-
    end subroutine init_driver
 
    !! ============================================================================
@@ -542,8 +511,6 @@ contains
 
       integer :: tr, n, m ! tracer indices
 
-      ! JP TMP
-      integer :: ll
 
 
 
@@ -562,32 +529,17 @@ contains
          ! before surface_flux call.
          ex_tr_surf(kk,isphum) = lm4_model%atm_forc%q_bot(l)
 
-         ! TODO: review
          do tr = 1,ntcana
             ex_tr_surf(kk,tr) = lm4_model%From_lnd%tr(l,k,tr)
          enddo
       end do
 
-      ! ! loop over land gridcells to distrubute across tiles in each gridcell
-      ! call ESMF_LogWrite('JP: looping over land gridcells and tiles', ESMF_LOGMSG_INFO)
-      ! do ll = lnd%ls,lnd%le
-      !    ce = first_elmt(land_tile_map(ll))
-      !    k = 0       
-      !    do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))   
-      !       write(logmsg, '(A,5I4)') 'sfb LM4 loop ll, i,j,l,k = ', ll, i,j,l,k
-      !       call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-      !       ! ex_t_atm(k) = lm4_model%atm_forc%t_bot(ll)
-      !    end do
-      ! end do
-      ! call ESMF_LogWrite('JP: end looping over land gridcells and tiles', ESMF_LOGMSG_INFO)
-
-      call ESMF_LogWrite('JP: looping over tiles', ESMF_LOGMSG_INFO)
       ce = first_elmt(land_tile_map, ls=lnd%ls)
       kk = 0  ! global tile index
       do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
          kk = kk + 1
 
-         ! ok, now actaually fill in tile data from gridcell data
+         ! fill in tile data from gridcell data
          ex_t_atm(kk)  = lm4_model%atm_forc%t_bot(l)
          ex_q_atm(kk)  = lm4_model%atm_forc%q_bot(l)
          ex_u_atm(kk)  = lm4_model%atm_forc%u_bot(l)
@@ -597,29 +549,6 @@ contains
          ex_p_surf(kk) = lm4_model%atm_forc%p_surf(l)
          ex_gust(kk)   = lm4_model%atm_forc%gust(l)
 
-         write(logmsg, '(A,5I4)') 'sfb LM4 loop 2 kk, i,j,l,k = ', kk, i,j,l,k
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-         ! write out   ex_p_surf(kk)
-         write(logmsg, '(A,F10.2)')     '   sfb LM4  ', ex_p_surf(kk) 
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-      end do
-
-      call sleep(10)
-      write(logmsg, '(A,2I8)') 'JP: number of tiles filled = ', kk, ntiles_lnd
-      call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
-      ! sleep for 10 seconds to allow log messages to be written in order
-      call sleep(10)
-
-
-      kk = 0  ! global tile index
-      ce = first_elmt(land_tile_map, ls=lnd%ls)
-
-      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
-         kk = kk + 1
-         write(logmsg, '(A,5I4)') 'sfb LM4 loop 3 kk, i,j,l,k = ', kk, i,j,l,k
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)      
-
          ! this is mimicking the original code for land roughness vars
          ex_rough_mom(kk)   = lm4_model%From_lnd%rough_mom(l,k)
          ex_rough_moist(kk) = lm4_model%From_lnd%rough_heat(l,k)
@@ -627,7 +556,7 @@ contains
          ex_rough_scale(kk) = lm4_model%From_lnd%rough_scale(l,k)
 
          ex_t_surf(kk) = lm4_model%From_lnd%t_surf(l,k)
-         ex_t_ca(kk)   = lm4_model%From_lnd%t_ca(l,k)
+         ex_t_ca(kk)   = lm4_model%From_lnd%t_ca(l,k)         
       end do
 
 
@@ -677,7 +606,6 @@ contains
 
 
       !! TODO: blocking not used for now
-      !! TODO: make sure output args that are used outside of this routine have the right scope
       call lm4_surface_flux_1d ( &
       ! inputs
          ex_t_atm, ex_q_atm,  & !! TODO: link q_bot var and tracer field
@@ -713,6 +641,7 @@ contains
          ex_u_star, ex_b_star, ex_q_star,        &
          ex_del_m, ex_del_h, ex_del_q, ex_avail  )
 
+      ! TODO: OMP parallel do
       do k = 1, ntiles_lnd
          ex_u10(k) = 0.
          if(ex_avail(k)) then
@@ -741,7 +670,7 @@ contains
    !  enddo ! end of block loop
 
       ! TODO: need "fill derivatives for all tracers" block?
-
+      
       do k = 1, ntiles_lnd
          if(ex_avail(k)) ex_drag_q(k) = ex_wind(k)*ex_cd_q(k)
          ! [6] get mean quantities on atmosphere grid
@@ -749,7 +678,7 @@ contains
          ex_t_surf4(k) = ex_t_surf(k) ** 4
       enddo
 
-      !! TODO: aggregate back to gridcell (or aggregate fluxes?)
+      !! TODO: This is wrong. aggregate back to gridcell (or aggregate fluxes?)
       ! ignore '_fix' albedos in original code, just send land albedos for export
       lm4_model%atm_sfc%albedo_vis_dir = lm4_model%From_lnd%albedo_vis_dir(:,ntile_types)
       lm4_model%atm_sfc%albedo_nir_dir = lm4_model%From_lnd%albedo_nir_dir(:,ntile_types)
@@ -1000,9 +929,6 @@ contains
       kk = 0
       do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
          kk = kk + 1
-         write(logmsg, '(A,5I4)') 'sfb LM4 flux_down_from_atmos loop kk, i,j,l,k = ', kk, i,j,l,k  
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
          lm4_model%From_atm%t_flux(l,k)                  = ex_flux_t(kk)
          lm4_model%From_atm%sw_flux(l,k)                 = ex_flux_sw(kk)
          lm4_model%From_atm%sw_flux_down_vis_dir(l,k)    = ex_flux_sw_down_vis_dir(kk)
@@ -1031,32 +957,32 @@ contains
 
 
 
-      ! TODO: review scope of these
-      ! These originally had data overrides
-      if(associated(lm4_model%From_atm%drag_q)) then
-         lm4_model%From_atm%drag_q(:,ntile_types) = ex_drag_q
-      endif
-      if(associated(lm4_model%From_atm%lwdn_flux)) then
-         lm4_model%From_atm%lwdn_flux(:,ntile_types) = ex_flux_lwd
-      endif
-      if(associated(lm4_model%From_atm%cd_m)) then
-         lm4_model%From_atm%cd_m(:,ntile_types) = ex_cd_m
-      endif
-      if(associated(lm4_model%From_atm%cd_t)) then
-         lm4_model%From_atm%cd_t(:,ntile_types) = ex_cd_t
-      endif
-      if(associated(lm4_model%From_atm%bstar)) then
-         lm4_model%From_atm%bstar(:,ntile_types) = ex_b_star
-      endif
-      if(associated(lm4_model%From_atm%ustar)) then
-         lm4_model%From_atm%ustar(:,ntile_types) = ex_u_star
-      endif
-      if(associated(lm4_model%From_atm%wind)) then
-         lm4_model%From_atm%wind(:,ntile_types) = ex_wind
-      endif
-      if(associated(lm4_model%From_atm%z_bot)) then
-         lm4_model%From_atm%z_bot(:,ntile_types) = ex_z_atm
-      endif
+      ! ! TODO: review scope of these
+      ! ! These originally had data overrides
+      ! if(associated(lm4_model%From_atm%drag_q)) then
+      !    lm4_model%From_atm%drag_q(:,ntile_types) = ex_drag_q
+      ! endif
+      ! if(associated(lm4_model%From_atm%lwdn_flux)) then
+      !    lm4_model%From_atm%lwdn_flux(:,ntile_types) = ex_flux_lwd
+      ! endif
+      ! if(associated(lm4_model%From_atm%cd_m)) then
+      !    lm4_model%From_atm%cd_m(:,ntile_types) = ex_cd_m
+      ! endif
+      ! if(associated(lm4_model%From_atm%cd_t)) then
+      !    lm4_model%From_atm%cd_t(:,ntile_types) = ex_cd_t
+      ! endif
+      ! if(associated(lm4_model%From_atm%bstar)) then
+      !    lm4_model%From_atm%bstar(:,ntile_types) = ex_b_star
+      ! endif
+      ! if(associated(lm4_model%From_atm%ustar)) then
+      !    lm4_model%From_atm%ustar(:,ntile_types) = ex_u_star
+      ! endif
+      ! if(associated(lm4_model%From_atm%wind)) then
+      !    lm4_model%From_atm%wind(:,ntile_types) = ex_wind
+      ! endif
+      ! if(associated(lm4_model%From_atm%z_bot)) then
+      !    lm4_model%From_atm%z_bot(:,ntile_types) = ex_z_atm
+      ! endif
 
 
       lm4_model%From_atm%tr_flux = 0.0
@@ -1098,7 +1024,7 @@ contains
          ex_dt_tr_surf,     & ! tendency of tracers at the surface
          ex_delta_tr_n
 
-      integer :: l, tr 
+      integer :: tr 
 
       !----- compute surface temperature change ----- 
 
@@ -1459,7 +1385,6 @@ contains
       integer,allocatable :: ug_dim_data(:) ! Unstructured axis data.
       ! integer             :: id_lon, id_lonb
       ! integer             :: id_lat, id_latb
-      integer :: i
       character(32) :: name       ! tracer name
 
       ! Register the unstructured axis for the unstructured domain.
@@ -1593,11 +1518,114 @@ contains
    ! model tile exists or not
    logical function land_tile_exists(tile)
       use land_tile_mod,      only : land_tile_enum_type, land_tile_type
-   type(land_tile_type), pointer :: tile
-   land_tile_exists = associated(tile)
+      type(land_tile_type), pointer :: tile
+      land_tile_exists = associated(tile)
    end function land_tile_exists
 
-   end module lm4_driver
+   ! ============================================================================
+   !! aggregate all land tiles in a grid cell
+   !! weighted average by land tile fraction
+
+   subroutine aggregate_land_tiles(tile_data, grid_data)
+      real, dimension(:), intent(in)  :: tile_data ! data on land tiles
+      real, dimension(:), intent(out) :: grid_data ! aggregated data on (unstructured) grid cell
+
+      ! check dimensions
+      if (size(tile_data) /= ntiles_lnd) then
+         write(logmsg,'(A,2I0)') 'Error in aggregate_land_tiles: size(tile_data) /= ntiles_lnd', size(tile_data), ntiles_lnd
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_ERROR)
+         stop
+      endif
+      if (size(grid_data) /= size(lnd%ug_landfrac)) then
+         write(logmsg,'(A,2I0)') 'Error in aggregate_land_tiles: size(grid_data) /= size(lnd%ug_landfrac)', size(grid_data), size(lnd%ug_landfrac)
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_ERROR)
+         stop
+      endif
+
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      kk = 0
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))       
+         kk = kk + 1
+         if (.not. land_tile_exists(tile)) cycle
+         grid_data(l) = grid_data(l) + tile_data(kk) * tile%frac
+      end do   
+
+   end subroutine aggregate_land_tiles
+
+
+   subroutine test_aggregate_land_tiles()
+
+      use land_tile_mod,      only : nitems
+
+      real, dimension(ntiles_lnd) :: tile_data
+      real, dimension(:), allocatable :: grid_data
+
+      real    :: scaled_frac_data     = 0.0 ! tile data scaled by tile fraction
+      real    :: sum_scaled_frac_data = 0.0 ! sum of tile data scaled by tile fraction. SHould be equal to grid data
+
+      real    :: tol                  = 1.0e-6
+      integer :: num_tiles            = 0  ! number of land tiles in current grid cell
+
+
+      allocate(grid_data(size(lnd%ug_landfrac)))
+
+
+      ! create up some tile data
+      call random_number(tile_data)
+
+      grid_data = 0.0
+
+      call aggregate_land_tiles(tile_data, grid_data)
+
+      !!! TMP TEST: make one gridcell wrong 
+      grid_data(5) = grid_data(5) + 0.001
+
+      ! print results
+      write(logmsg,'(A)') 'Results of test_aggregate_land_tiles:'
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      kk = 0
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))       
+         kk = kk + 1
+
+         if (k == 1) then !(first tile of new grid cell)
+
+            num_tiles = nitems(land_tile_map(l))
+
+            write(logmsg,'(A)') '----------------------------------'
+            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+            write(logmsg,'(A,I4,A,I2,A,F8.4)') 'Grid cell ', l, ' (', num_tiles, ' tiles) = ', grid_data(l)
+            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+
+            sum_scaled_frac_data = 0.0
+
+         endif
+         
+         scaled_frac_data = tile_data(kk) * tile%frac
+         write(logmsg,'(A,I4,A,I2,A,I4,A,F8.4,A,F8.4,A,F8.4)') '  Tile(l,k,kk=', l, ',', k, ',', kk, ') ', tile_data(kk), ' *', tile%frac, ' =', scaled_frac_data
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+
+         sum_scaled_frac_data = sum_scaled_frac_data + scaled_frac_data
+
+         if (k == num_tiles) then  ! on last tile of current grid cell
+            write(logmsg,'(A,F8.4,A,F8.4)') '  Sum of scaled tile values:', sum_scaled_frac_data
+            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+            if (abs(sum_scaled_frac_data - grid_data(l)) > tol) then
+               write(logmsg,'(A,I4,A,F8.4,A,F8.4)') '    MISMATCH FOR GRID CELL ', l, ': ', sum_scaled_frac_data, ' vs ', grid_data(l)
+               call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
+               call ESMF_Finalize(endflag=ESMF_END_ABORT)
+            endif
+            sum_scaled_frac_data = 0.0
+         endif
+
+
+
+      end do
+
+      deallocate(grid_data)
+
+   end subroutine test_aggregate_land_tiles  
+
+end module lm4_driver
 
 
    
