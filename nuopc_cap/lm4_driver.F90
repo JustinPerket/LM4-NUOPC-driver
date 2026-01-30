@@ -678,12 +678,33 @@ contains
          ex_t_surf4(k) = ex_t_surf(k) ** 4
       enddo
 
-      !! TODO: This is wrong. aggregate back to gridcell (or aggregate fluxes?)
-      ! ignore '_fix' albedos in original code, just send land albedos for export
-      lm4_model%atm_sfc%albedo_vis_dir = lm4_model%From_lnd%albedo_vis_dir(:,ntile_types)
-      lm4_model%atm_sfc%albedo_nir_dir = lm4_model%From_lnd%albedo_nir_dir(:,ntile_types)
-      lm4_model%atm_sfc%albedo_vis_dif = lm4_model%From_lnd%albedo_vis_dif(:,ntile_types)
-      lm4_model%atm_sfc%albedo_nir_dif = lm4_model%From_lnd%albedo_nir_dif(:,ntile_types)      
+
+      if (lm4_model%nml%cpl2atm ) then 
+         ! accumulate tile-fraction-weighted albedos for each grid cell l
+         ! ignore '_fix' albedos in original code, just send land albedos for export
+         ! note SW down from atmosphere is grid cell value, so no need to weight
+         ce = first_elmt(land_tile_map, ls=lnd%ls)
+         kk = 0  ! global tile index
+         lm4_model%atm_sfc%albedo_vis_dir = 0.0
+         lm4_model%atm_sfc%albedo_nir_dir = 0.0
+         lm4_model%atm_sfc%albedo_vis_dif = 0.0
+         lm4_model%atm_sfc%albedo_nir_dif = 0.0
+
+         ! check if associated properly
+         if (.not. associated(lm4_model%atm_sfc%albedo_nir_dif)) then
+            call ESMF_LogWrite('lm4_model%atm_sfc%albedo_nir_dif not associated in sfc_boundary_layer', ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
+         end if
+
+         do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))  
+            kk = kk + 1
+            if (.not. land_tile_exists(tile)) cycle
+
+            lm4_model%atm_sfc%albedo_vis_dir(l) = lm4_model%atm_sfc%albedo_vis_dir(l) + lm4_model%From_lnd%albedo_vis_dir(l,k)*tile%frac
+            lm4_model%atm_sfc%albedo_nir_dir(l) = lm4_model%atm_sfc%albedo_nir_dir(l) + lm4_model%From_lnd%albedo_nir_dir(l,k)*tile%frac
+            lm4_model%atm_sfc%albedo_vis_dif(l) = lm4_model%atm_sfc%albedo_vis_dif(l) + lm4_model%From_lnd%albedo_vis_dif(l,k)*tile%frac
+            lm4_model%atm_sfc%albedo_nir_dif(l) = lm4_model%atm_sfc%albedo_nir_dif(l) + lm4_model%From_lnd%albedo_nir_dif(l,k)*tile%frac
+         end do
+      end if
 
       ! TODO: convert these from  xgrid and Land_Ice_Atmos_Boundary to atmos_land_boundary_type?
       ! [6.2] put relevant quantities onto atmospheric boundary
@@ -1113,23 +1134,20 @@ contains
       
       !! TODO: should be using updated t_ca, q_ca, t_surf here! check pressure too
 
+      call aggregate_land_tiles(ex_flux_t, lm4_model%atm_sfc%shflx)
+      call aggregate_land_tiles(ex_flux_tr(:,isphum), lm4_model%atm_sfc%lhflx)
       ! not originally to flux_up_to_atmos, but needed by ufs atm
-      lm4_model%atm_sfc%q_surf = ex_tr_surf_new(:,isphum)  ! TODO: review if this is correct 
-
-
+      call aggregate_land_tiles(ex_tr_surf_new(:,isphum), lm4_model%atm_sfc%q_surf)
 
       if (lm4_model%nml%kinematic_flux) then
          ! convert units from W/m2
-         rho = virtual_temp(ex_t_ca_new, ex_tr_surf_new(:,isphum))
+         rho = virtual_temp(lm4_model%atm_sfc%t_surf, lm4_model%atm_sfc%q_surf)
          rho = air_density(lm4_model%atm_forc%p_surf, rho)
-         lm4_model%atm_sfc%shflx = ex_flux_t/(rho*cp_air)  ! SH/(rho*c_p)
-         lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)/(rho*hlv)  ! LH/(rho*h_vap)
-      else
-         lm4_model%atm_sfc%shflx = ex_flux_t  ! SH
-         lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)  ! LH
+         lm4_model%atm_sfc%shflx = lm4_model%atm_sfc%shflx/(rho*cp_air)  ! SH/(rho*c_p)
+         lm4_model%atm_sfc%lhflx = lm4_model%atm_sfc%lhflx/(rho*hlv)     ! LH/(rho*h_vap)
       endif
 
-      lm4_model%atm_sfc%t_surf = ex_t_surf_new 
+      call aggregate_land_tiles(ex_t_ca_new, lm4_model%atm_sfc%t_surf)
 
       ! !=======================================================================
       ! !-------------------- diagnostics section ------------------------------
@@ -1577,8 +1595,7 @@ contains
 
       call aggregate_land_tiles(tile_data, grid_data)
 
-      !!! TMP TEST: make one gridcell wrong 
-      grid_data(5) = grid_data(5) + 0.001
+
 
       ! print results
       write(logmsg,'(A)') 'Results of test_aggregate_land_tiles:'
