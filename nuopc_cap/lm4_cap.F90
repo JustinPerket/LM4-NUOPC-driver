@@ -541,6 +541,18 @@ contains
       call sfc_boundary_layer(real(sec), lm4_model)
       call update_atmos_model_down(lm4_model)              ! for gust calculation with data atmosphere
       call flux_down_from_atmos(real(sec), lm4_model)      ! JP: needs review of implicit coupling
+
+      ! TMP debug. Check here min/max/mean values
+      write(logmsg, '(A,3F12.4)') 'LM4 Cap ex_flux_lw min/mean/max = ', minval(lm4_model%From_atm%lwdn_flux), sum(lm4_model%From_atm%lwdn_flux)/size(lm4_model%From_atm%lwdn_flux), maxval(lm4_model%From_atm%lwdn_flux)
+      call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
+      write(logmsg, '(A,3F12.4)') 'LM4 Cap ex_u_star min/mean/max = ', minval(lm4_model%From_atm%ustar), sum(lm4_model%From_atm%ustar)/size(lm4_model%From_atm%ustar), maxval(lm4_model%From_atm%ustar)  
+      call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
+      write(logmsg, '(A,3F12.4)') 'LM4 Cap ex_drag_q min/mean/max = ', minval(lm4_model%From_atm%drag_q), sum(lm4_model%From_atm%drag_q)/size(lm4_model%From_atm%drag_q), maxval(lm4_model%From_atm%drag_q)    
+      call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
+
+
+
+
       call update_land_model_fast(lm4_model%From_atm,lm4_model%From_lnd)
 
       if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm

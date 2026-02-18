@@ -280,6 +280,43 @@ contains
          rough_mom, rough_heat, rough_moist, w_atm,          &
          cd_m, cd_t, cd_q, u_star, b_star, avail             )
 
+      ! JP TMP DEBUG, check if u_star is inf. If so, print out the local variables that go into the monin-obukhov
+      do i = 1, size(avail)
+         if ( abs(u_star(i)) > 1.0e10 ) then
+            write (*,*) 'Error: u_star is infinite at index ', i
+            write (*,*) 'Input variables for monin_obukhov:'
+            write (*,*) '   thv_atm(i) = ', thv_atm(i)
+            write (*,*) '   thv_surf(i) = ', thv_surf(i)
+            write (*,*) '   z_atm(i) = ', z_atm(i)
+            write (*,*) '   rough_mom(i) = ', rough_mom(i)
+            write (*,*) '   rough_heat(i) = ', rough_heat(i)
+            write (*,*) '   rough_moist(i) = ', rough_moist(i)
+            write (*,*) '   w_atm(i) = ', w_atm(i)
+            write (*,*) '   cd_m(i) = ', cd_m(i)
+            write (*,*) '   cd_t(i) = ', cd_t(i)
+            write (*,*) '   cd_q(i) = ', cd_q(i)
+            write (*,*) '   u_star(i) = ', u_star(i)
+            write (*,*) '   b_star(i) = ', b_star(i)
+            write (*,*) '   avail(i) = ', avail(i)
+
+            write (*,*) "Other inputs to lm4_surface_flux_1d are:"
+            write (*,*) '   t_atm(i) = ', t_atm(i)
+            write (*,*) '   q_atm_in(i) = ', q_atm_in(i)
+            write (*,*) '   u_atm(i) = ', u_atm(i)
+            write (*,*) '   v_atm(i) = ', v_atm(i)
+            write (*,*) '   p_atm(i) = ', p_atm(i)
+            write (*,*) '   z_atm(i) = ', z_atm(i)
+            write (*,*) '   p_surf(i) = ', p_surf(i)
+            write (*,*) '   t_surf(i) = ', t_surf(i)
+            write (*,*) '   t_ca(i) = ', t_ca(i)
+            write (*,*) '   q_surf(i) = ', q_surf(i)
+            write (*,*) '   u_surf(i) = ', u_surf(i)
+            write (*,*) '   v_surf(i) = ', v_surf(i)
+         end if
+      enddo
+
+
+
     !   ! override with ocean fluxes from NCAR calculation
     !   if (ncar_ocean_flux .or. ncar_ocean_flux_orig) then
     !      call  ncar_ocean_fluxes (w_atm, th_atm, t_surf0, q_atm, q_surf0, z_atm, &
