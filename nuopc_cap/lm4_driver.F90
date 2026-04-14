@@ -251,10 +251,7 @@ contains
       use mpp_mod,            only: mpp_pe, mpp_root_pe
       use land_domain_mod,    only: domain_create
       use block_control_mod,  only: block_control_type, define_blocks_packed
-      !use land_restart_mod,   only: sfc_prop_restart_read, sfc_prop_transfer
-
       use land_tile_io_mod,   only : gather_tile_index
-                           
 
       type(lm4_type),          intent(inout) :: lm4_model ! land model's variable type
 
@@ -264,10 +261,7 @@ contains
       !integer                             ::   blocksize
       !logical, save                       :: block_message = .true.
 
-      ! JP TMP
-      integer :: numtiles ! number of tiles in gridcell
 
-      ! end JP TMP
       integer :: isc, iec, jsc, jec
 
       ! FMS domain creation:
@@ -339,6 +333,8 @@ contains
       ex_dfdtr_atm   = 0.0_r8
       ex_e_tr_n      = 0.0_r8
       ex_f_tr_delt_n = 0.0_r8
+      ex_avail       = 0.0_r8
+      ex_land        = 0.0_r8
 
       ! initialize ex_avail and ex_land
       ex_avail    = .TRUE.
@@ -386,20 +382,12 @@ contains
       endif
 
       
-      ntile_types = max_n_tiles()
-      write(logmsg, '(A,I4)') 'LM4 init_driver max number of land tile types = ', ntile_types
-      call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
-      ! ce = first_elmt(land_tile_map, ls=lnd%ls)
-      ! do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))   
-      !    write(logmsg, '(A,4I4)') 'init LM4 loop i,j,l,k = ', i,j,l,k
-      !    call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-      ! enddo
-
-
-      ! JP test of aggregate_land_tiles
-      call test_aggregate_land_tiles()
-      ! end JP test
+      if (lm4_model%nml%lm4_debug > 0) then
+         ntile_types = max_n_tiles()
+         write(logmsg, '(A,I4)') 'LM4 init_driver max number of land tile types = ', ntile_types
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+         call test_aggregate_land_tiles()
+      endif
 
       
    end subroutine init_driver
@@ -485,7 +473,6 @@ contains
 
 
       !! -- These were originally allocatable:
-      !!
 
       logical, dimension(ntiles_lnd) :: &
          ex_seawater       !< true if exchange grid cell is over seawater
@@ -502,12 +489,6 @@ contains
          ex_dtaudu_atm,&
          ex_dtaudv_atm
 
-      ! values added for LM3
-
-      !ex_e_q_n    ,  &
-
-
-
       integer :: tr, n, m ! tracer indices
 
 
@@ -520,46 +501,6 @@ contains
       ex_u_surf = 0.0
       ex_v_surf = 0.0
 
-      ! TMP DEBUG print out what's coming from atm at watch point
-      do l = lnd%ls,lnd%le
-         i = lnd%i_index(l)
-         j = lnd%j_index(l)
-
-         call set_current_point(l,1) ! for debug output
-         if (is_watch_cell()) then  
-            write(logmsg, '(A,2I4,A)') 'At watch cell in sfc_boundary, i,j = ', i, j, '-----------------------------'
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            ! do for all these vars:
-
-            write(logmsg, '(A,F12.4)') '    atm_forc%z_bot(l) = ', lm4_model%atm_forc%z_bot(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)  
-            write(logmsg, '(A,F12.4)') '    atm_forc%t_bot(l) = ', lm4_model%atm_forc%t_bot(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%p_bot(l) = ', lm4_model%atm_forc%p_bot(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%u_bot(l) = ', lm4_model%atm_forc%u_bot(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%v_bot(l) = ', lm4_model%atm_forc%v_bot(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%q_bot(l) = ', lm4_model%atm_forc%q_bot(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%p_surf(l) = ', lm4_model%atm_forc%p_surf(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%gust(l) = ', lm4_model%atm_forc%gust(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%flux_lw(l) = ', lm4_model%atm_forc%flux_lw(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%flux_sw_down_vis_dif(l) = ', lm4_model%atm_forc%flux_sw_down_vis_dif(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%flux_sw_down_vis_dir(l) = ', lm4_model%atm_forc%flux_sw_down_vis_dir(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%flux_sw_down_nir_dif(l) = ', lm4_model%atm_forc%flux_sw_down_nir_dif(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_forc%flux_sw_down_nir_dir(l) = ', lm4_model%atm_forc%flux_sw_down_nir_dir(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
-         end if
-      end do
 
       ce = first_elmt(land_tile_map, ls=lnd%ls)
       kk = 0  ! global tile index
@@ -599,28 +540,6 @@ contains
          ex_t_ca(kk)   = lm4_model%From_lnd%t_ca(l,k)         
       end do
 
-      ! JP TMP DEBUG. Print out everything in above loop for watch point
-      do l = lnd%ls,lnd%le
-         i = lnd%i_index(l)
-         j = lnd%j_index(l)
-         call set_current_point(l,1) ! for debug output
-         if (is_watch_cell()) then  
-            write(logmsg, '(A,2I4,A)') 'At watch cell after filling tile data in sfc_boundary, i,j = ', i, j, '-----------------------------'
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    From_lnd%rough_mom(l,k) = ', lm4_model%From_lnd%rough_mom(l,k)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    From_lnd%rough_heat(l,k) = ', lm4_model%From_lnd%rough_heat(l,k)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    From_lnd%rough_scale(l,k) = ', lm4_model%From_lnd%rough_scale(l,k)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    From_lnd%t_surf(l,k) = ', lm4_model%From_lnd%t_surf(l,k)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    From_lnd%t_ca(l,k) = ', lm4_model%From_lnd%t_ca(l,k)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-         end if
-      end do
-
-
       ! initialize other variables to zero
       ex_flux_t         =  0.0
       ex_flux_tr        =  0.0
@@ -643,38 +562,16 @@ contains
       ex_dtaudu_atm     =  0.0
       ex_dtaudv_atm     =  0.0
 
-      ! Note, these are relying on the send_tile_data_0d_array procedure
-      ! to avoid bring land_mdel.F90's tile buffer into calls
-      ! Note: only use for data with tile dim.?
-      ! call send_tile_data(iug_q_atm      , ex_q_atm      )
-      ! call send_tile_data(iug_t_atm      , ex_t_atm      )
-      ! call send_tile_data(iug_u_atm      , ex_u_atm      )
-      ! call send_tile_data(iug_v_atm      , ex_v_atm      )
-      ! call send_tile_data(iug_p_atm      , ex_p_atm      )
-      ! call send_tile_data(iug_z_atm      , ex_z_atm      )
-      ! call send_tile_data(iug_p_surf     , ex_p_surf     )
-      ! call send_tile_data(iug_t_surf     , ex_t_surf     )
-      ! call send_tile_data(iug_t_ca       , ex_t_ca       )
-      ! call send_tile_data(iug_q_surf     , ex_q_surf     )
-      ! call send_tile_data(iug_rough_mom  , ex_rough_mom  )
-      ! call send_tile_data(iug_rough_heat , ex_rough_heat )
-      ! call send_tile_data(iug_rough_moist, ex_rough_moist)
-      ! call send_tile_data(iug_rough_scale, ex_rough_scale)
-      ! call send_tile_data(iug_gust       , ex_gust       )
 
-
-
-
-
-      !! TODO: blocking not used for now
+      ! blocking not used for now
       call lm4_surface_flux_1d ( &
       ! inputs
-         ex_t_atm, ex_q_atm,  & !! TODO: link q_bot var and tracer field
+         ex_t_atm, ex_q_atm,  & 
          ex_u_atm, ex_v_atm,  ex_p_atm, &
          ex_z_atm, ex_p_surf, ex_t_surf, &
          ex_t_ca, &
       ! inout
-         ex_tr_surf(:,isphum),         & !! TODO review using q_bot as surface Q (this is inout).
+         ex_tr_surf(:,isphum),         & 
       ! more inputs
          ex_u_surf, ex_v_surf,             & ! 0s
          ex_rough_mom, ex_rough_heat, &
@@ -692,10 +589,6 @@ contains
          ex_land, ex_seawater, ex_avail                                 & ! Is land, Is seawater, Is ex. avail
          )
 
-
-      ! JP TMP test. Suspect that ex_flux_lw is all 0s. Check min/max/mean
-      write(logmsg, '(A,3F12.4)') 'ex_flux_lw min/mean/max = ', minval(ex_flux_lw), sum(ex_flux_lw)/ntiles_lnd, maxval(ex_flux_lw)
-      call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO) 
 
 
       !! ....
@@ -837,15 +730,6 @@ contains
       !       ex_ref(l)    = 100.*ex_ref(l)/ex_qs_ref(l)
       !    endif
       ! enddo
-
-      ! ! lots of send_data stuff originally here, removed
-      ! ! TODO: get diag history write back in
-
-      ! JP DEBUG
-      ! if (mpp_pe()== mpp_root_pe() ) then
-      !    write(*,*) 'calling write_data at end of sfc_boundary_layer-------'
-      !    call write_data(lm4_model)
-      ! endif
 
    end subroutine sfc_boundary_layer
 
@@ -995,7 +879,7 @@ contains
 
          ! moisture
 
-         ! moisture vs. surface temperture, assuming saturation
+         ! moisture vs. surface temperature, assuming saturation
          ex_gamma(k)   =  1.0 / (1.0 - ex_dtmass(k)*(ex_dflux_tr(k,isphum) + ex_dfdtr_atm(k,isphum)))
          ex_e_q_n(k)      =  ex_dtmass(k) * ex_dedt_surf(k) * ex_gamma(k)
          ex_dedt_surf(k)  =  ex_dedt_surf(k) + ex_dfdtr_atm(k,isphum) * ex_e_q_n(k)
@@ -1023,7 +907,7 @@ contains
          lm4_model%From_atm%sw_flux_down_vis_dif(l,k)    = ex_flux_sw_down_vis_dif(kk)
          lm4_model%From_atm%sw_flux_down_total_dif(l,k)  = ex_flux_sw_down_total_dif(kk)  
 
-         ! Does not seem tbe used in LM4
+         ! Does not seem to be used in LM4
          ! lm4_model%From_atm%lw_flux(l,k)                 = ex_flux_lw(kk)
          lm4_model%From_atm%dhdt(l,k)                   = ex_dhdt_surf(kk)
          lm4_model%From_atm%drdt(l,k)                   = ex_drdt_surf(kk)
@@ -1045,18 +929,6 @@ contains
 
          !! In original code, also had these, but don't appear needed by LM4:
          !! %cd_m, %cd_t, %wind, %z_bot
-
-         ! JP TMP DEBUG 
-         call set_current_point(l,k) ! for debug output
-         if (is_watch_cell()) then  
-            write(logmsg, '(A,2I6)') 'In flux_down_from_atmos, l,k = ', l, k
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '  lm4_model%atm_forc%t_bot(l) = ', lm4_model%atm_forc%t_bot(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '  lm4_model%From_atm%tprec(l,k) = ', lm4_model%From_atm%tprec(l,k)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-         endif
-
 
       end do
       
@@ -1191,11 +1063,9 @@ contains
       !-----------------------------------------------------------------------
       !---- get mean quantites on atmospheric grid ----
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_t, 'ATM', ex_delta_t_n, xmap_sfc)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%shflx,'ATM', ex_flux_t    , xmap_sfc) !miz
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%lhflx,'ATM', ex_flux_tr(:,isphum), xmap_sfc)!miz
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr, 'ATM', ex_delta_tr_n, xmap_sfc)  
       
-      !! TODO: should be using updated t_ca, q_ca, t_surf here! check pressure too
+      !! TODO: should be using updated t_ca, q_ca, t_surf here. check pressure too
 
       call aggregate_land_tiles(ex_flux_t, lm4_model%atm_sfc%shflx)
       call aggregate_land_tiles(ex_flux_tr(:,isphum), lm4_model%atm_sfc%lhflx)
@@ -1210,119 +1080,8 @@ contains
          lm4_model%atm_sfc%lhflx = lm4_model%atm_sfc%lhflx/(rho*hlv)     ! LH/(rho*h_vap)
       endif
 
-      ! JP TMP DEBUG
-      do l = lnd%ls,lnd%le
-         i = lnd%i_index(l)
-         j = lnd%j_index(l)
-         call set_current_point(l,1) ! for debug output
-         if (is_watch_cell()) then
-            write(logmsg, '(A,3I4,A)') 'At watch cell before aggregate_land_tiles in flux_up, i,j,l = ', i, j, l, '------------'
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%t_surf(l) = ', lm4_model%atm_sfc%t_surf(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            ! Now get tile info
-            ce = first_elmt(land_tile_map(l))
-            do while (loop_over_tiles(ce,tile,k=k))
-               ! print out ex_t_ca_new for each tile
-               write(logmsg, '(A,I6,A,I6,A,I6)') '    tile info before aggregate: l,k = ', l, ', ', k
-               call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-               write(logmsg, '(A,F12.4)') '      ex_t_ca_new(k) = ', ex_t_ca_new(k)
-               call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-               write(logmsg, '(A,F12.4)') '      tile%frac = ', tile%frac
-               call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-               write(logmsg, '(A,F12.4)') '      ex_t_ca_new(k)*tile%frac = ', ex_t_ca_new(k)*tile%frac
-               call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            end do
-         endif
-      enddo
-      ! END TMP DEBUG
-
       call aggregate_land_tiles(ex_t_ca_new, lm4_model%atm_sfc%t_surf)
 
-      ! JP TMP DEBUG
-      do l = lnd%ls,lnd%le
-         i = lnd%i_index(l)
-         j = lnd%j_index(l)
-         call set_current_point(l,1) ! for debug output
-         if (is_watch_cell()) then
-            write(logmsg, '(A,3I4,A)') 'At watch cell after aggregate_land_tiles in flux_up, i,j,l = ', i, j, l, '------------'
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%t_surf(l) = ', lm4_model%atm_sfc%t_surf(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            ! Now get tile info
-            ce = first_elmt(land_tile_map(l))
-            do while (loop_over_tiles(ce,tile,k=k))
-               ! print out ex_t_ca_new for each tile
-               write(logmsg, '(A,I6,A,I6,A,I6)') '    tile info before aggregate: l,k = ', l, ', ', k
-               call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-               write(logmsg, '(A,F12.4)') '      ex_t_ca_new(k) = ', ex_t_ca_new(k)
-               call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            end do
-         endif
-      enddo
-      ! END TMP DEBUG
-
-
-      ! TMP DEBUG print out export fields if watch point
-      ! ce = first_elmt(land_tile_map, lnd%ls)
-      ! do while (loop_over_tiles(ce,tile, l,k))
-      !    call set_current_point(l,k) ! this is for debug output only
-      do l = lnd%ls,lnd%le
-         i = lnd%i_index(l)
-         j = lnd%j_index(l)
-
-         call set_current_point(l,1) ! for debug output
-         if (is_watch_cell()) then
-            write(logmsg, '(A,3I4,A)') 'At watch cell in flux_up, i,j,l = ', i, j, l, '------------'
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%lhflx(l) = ', lm4_model%atm_sfc%lhflx(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%shflx(l) = ', lm4_model%atm_sfc%shflx(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%q_surf(l) = ', lm4_model%atm_sfc%q_surf(l) 
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%t_surf(l) = ', lm4_model%atm_sfc%t_surf(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%albedo_vis_dir(l) = ', lm4_model%atm_sfc%albedo_vis_dir(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%albedo_nir_dir(l) = ', lm4_model%atm_sfc%albedo_nir_dir(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%albedo_vis_dif(l) = ', lm4_model%atm_sfc%albedo_vis_dif(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-            write(logmsg, '(A,F12.4)') '    atm_sfc%albedo_nir_dif(l) = ', lm4_model%atm_sfc%albedo_nir_dif(l)
-            call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
-            ! Now get tile info
-            ce = first_elmt(land_tile_map(l))
-            do while (loop_over_tiles(ce,tile,k=k))
-               ! print out ex_t_ca_new for each tile
-               write(logmsg, '(A,I6,A,I6,A,I6)') '    tile info: l,k = ', l, ', ', k
-               call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-               write(logmsg, '(A,F12.4)') '      ex_t_ca_new(k) = ', ex_t_ca_new(k)
-               call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-
-            end do
-         endif
-      enddo
-
-
-
-            ! write(logmsg, '(A,3F12.4)') 'At watch cell, lhflx min/mean/max = ', minval(lm4_model%atm_sfc%lhflx), sum(lm4_model%atm_sfc%lhflx)/size(lm4_model%atm_sfc%lhflx), maxval(lm4_model%atm_sfc%lhflx)
-            ! call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
-            ! write(logmsg, '(A,3F12.4)') 'At watch cell, shflx min/mean/max = ', minval(lm4_model%atm_sfc%shflx), sum(lm4_model%atm_sfc%shflx)/size(lm4_model%atm_sfc%shflx), maxval(lm4_model%atm_sfc%shflx)
-            ! call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
-            ! write(logmsg, '(A,3F12.4)') 'At watch cell, q_surf min/mean/max = ', minval(lm4_model%atm_sfc%q_surf), sum(lm4_model%atm_sfc%q_surf)/size(lm4_model%atm_sfc%q_surf), maxval(lm4_model%atm_sfc%q_surf)
-            ! call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO) 
-            ! wite(logmsg, '(A,3F12.4)') 'At watch cell, t_surf min/mean/max = ', minval(lm4_model%atm_sfc%t_surf), sum(lm4_model%atm_sfc%t_surf)/size(lm4_model%atm_sfc%t_surf), maxval(lm4_model%atm_sfc%t_surf)
-            ! call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
-            ! write(logmsg, '(A,3F12.4)') 'At watch cell, albedo_vis_dir min/mean/max = ', minval(lm4_model%atm_sfc%albedo_vis_dir), sum(lm4_model%atm_sfc%albedo_vis_dir)/size(lm4_model%atm_sfc%albedo_vis_dir), maxval(lm4_model%atm_sfc%albedo_vis_dir)
-            ! call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
-            ! write(logmsg, '(A,3F12.4)') 'At watch cell, albedo_nir_dir min/mean/max = ', minval(lm4_model%atm_sfc%albedo_nir_dir), sum(lm4_model%atm_sfc%albedo_nir_dir)/size(lm4_model%atm_sfc%albedo_nir_dir), maxval(lm4_model%atm_sfc%albedo_nir_dir)
-            ! call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
-            ! write(logmsg, '(A,3F12.4)') 'At watch cell, albedo_vis_dif min/mean/max = ', minval(lm4_model%atm_sfc%albedo_vis_dif), sum(lm4_model%atm_sfc%albedo_vis_dif)/size(lm4_model%atm_sfc%albedo_vis_dif), maxval(lm4_model%atm_sfc%albedo_vis_dif)
-            ! call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
-            ! write(logmsg, '(A,3F12.4)') 'At watch cell, albedo_nir_dif min/mean/max = ', minval(lm4_model%atm_sfc%albedo_nir_dif), sum(lm4_model%atm_sfc%albedo_nir_dif)/size(lm4_model%atm_sfc%albedo_nir_dif), maxval(lm4_model%atm_sfc%albedo_nir_dif)
-            ! call ESMF_LogWrite(trim(subname)//trim(logmsg), ESMF_LOGMSG_INFO)
 
       ! !=======================================================================
       ! !-------------------- diagnostics section ------------------------------
@@ -1666,17 +1425,6 @@ contains
 
    end subroutine land_diag_init
 
-   ! !! Write out the land structured grid diagnostics
-   ! !! ============================================================================
-   ! subroutine sg_send_data()
-
-   !    type(diag_buff_type), intent(inout) :: sg_diag
-
-
-
-
-
-   ! end subroutine sg_send_data
 
    !! Wrap up
    !! ===========================================================================
@@ -1748,12 +1496,6 @@ contains
          endif
          grid_data(l) = grid_data(l) + tile_data(kk) * tile%frac
 
-         ! ! TMP DEBUG
-         ! call set_current_point(l,1) ! for debug output
-         ! if (is_watch_cell()) then
-         !    write(logmsg,'(A,I4,A,I2,A,I4,A,F8.4)') '  Tile(l,k,kk=', l, ',', k, ',', kk, ') ', tile_data(kk), ' *', tile%frac, ' =', tile_data(kk) * tile%frac
-         !    call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-         ! endif
       end do   
 
    end subroutine aggregate_land_tiles
@@ -1783,9 +1525,6 @@ contains
 
       call aggregate_land_tiles(tile_data, grid_data)
 
-
-
-      ! print results
       write(logmsg,'(A)') 'Results of test_aggregate_land_tiles:'
       call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
 
@@ -1833,6 +1572,3 @@ contains
    end subroutine test_aggregate_land_tiles  
 
 end module lm4_driver
-
-
-   
