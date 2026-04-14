@@ -312,7 +312,8 @@ contains
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
       call ESMF_TimeIntervalGet(model_timestep, s=timestep_sec, rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return    
-      write(logmsg,*) timestep_sec
+      lm4_model%dt_secs = timestep_sec
+      write(logmsg,*) lm4_model%dt_secs
       call ESMF_LogWrite(trim(subname)//'init LM4 fast timestep: '//trim(logmsg), ESMF_LOGMSG_INFO)
 
       write(logmsg,*) lm4_model%nml%dt_lnd_slow
@@ -543,10 +544,9 @@ contains
       call update_land_model_fast(lm4_model%From_atm,lm4_model%From_lnd)
 
       if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
-         call flux_down_from_atmos(real(sec), lm4_model)
+         call flux_up_to_atmos(lm4_model)
       end if
 
-      call flux_up_to_atmos(lm4_model)
 
 
       call ESMF_ClockGet(dclock,  CurrTime=CurrTime, currSimTime=model_time, rc=rc)

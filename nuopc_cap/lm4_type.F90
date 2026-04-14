@@ -72,7 +72,14 @@ module lm4_type_mod
          ! dt_t      => NULL(), &
          shflx     => NULL(), &   ! sensible heat flux, W/m2   
          lhflx     => NULL(), &   ! latent heat flux, W/m2
-         q_surf   => NULL()       ! specific humidity at the surface, kg/kg
+         q_surf   => NULL(),  &   ! specific humidity at the surface, kg/kg
+         t_surf   => NULL(),  &   ! radiative surface temperature, degK
+
+         albedo_vis_dir => NULL(), &
+         albedo_nir_dir => NULL(), &
+         albedo_vis_dif => NULL(), &
+         albedo_nir_dif => NULL()
+
    end type atm_sfc_type
 
    ! TMP DEBUG
@@ -123,6 +130,7 @@ module lm4_type_mod
                                         Time_step_land, Time_step_slow, &
                                         Time_restart, Time_step_restart, &
                                         Time_atstart      
+      integer                        :: dt_secs ! fast time step in seconds
 
    end type lm4_type
 
@@ -137,7 +145,14 @@ contains
       if (associated(bnd%shflx))  deallocate(bnd%shflx)
       if (associated(bnd%lhflx))  deallocate(bnd%lhflx)
       if (associated(bnd%q_surf)) deallocate(bnd%q_surf)
+      if (associated(bnd%t_surf)) deallocate(bnd%t_surf)
+
       !if (associated(bnd%dt_t)) deallocate(bnd%dt_t)
+      if (associated(bnd%albedo_vis_dir)) deallocate(bnd%albedo_vis_dir)
+      if (associated(bnd%albedo_nir_dir)) deallocate(bnd%albedo_nir_dir)
+      if (associated(bnd%albedo_vis_dif)) deallocate(bnd%albedo_vis_dif)
+      if (associated(bnd%albedo_nir_dif)) deallocate(bnd%albedo_nir_dif)
+      
 
    end subroutine dealloc_atmsfc
 
@@ -153,11 +168,22 @@ contains
       allocate( bnd%shflx(lnd%ls:lnd%le) )
       allocate( bnd%lhflx(lnd%ls:lnd%le) )
       allocate( bnd%q_surf(lnd%ls:lnd%le) )
+      allocate( bnd%t_surf(lnd%ls:lnd%le) )
       !allocate( bnd%dt_t(lnd%ls:lnd%le) )
+      allocate( bnd%albedo_vis_dir(lnd%ls:lnd%le) )
+      allocate( bnd%albedo_nir_dir(lnd%ls:lnd%le) )
+      allocate( bnd%albedo_vis_dif(lnd%ls:lnd%le) )
+      allocate( bnd%albedo_nir_dif(lnd%ls:lnd%le) )
 
       bnd%shflx = 0.0
       bnd%lhflx = 0.0
       bnd%q_surf = 0.0
+      bnd%t_surf = 0.0
+
+      bnd%albedo_vis_dir = 0.0
+      bnd%albedo_nir_dir = 0.0
+      bnd%albedo_vis_dif = 0.0
+      bnd%albedo_nir_dif = 0.0
 
    end subroutine alloc_atmsfc
 

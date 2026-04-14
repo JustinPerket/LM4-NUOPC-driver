@@ -319,19 +319,19 @@ contains
          lm4_model%Time_restart = increment_date(lm4_model%Time_end, 0, 0, 10, 0, 0, 0)   ! no intermediate restart
       else
 
-         lm4_model%Time_restart = increment_date(lm4_model%Time_init, lm4_model%nml%restart_interval(1), lm4_model%nml%restart_interval(2), &
+         lm4_model%Time_restart = increment_date(lm4_model%Time_land, lm4_model%nml%restart_interval(1), lm4_model%nml%restart_interval(2), &
             lm4_model%nml%restart_interval(3), lm4_model%nml%restart_interval(4), lm4_model%nml%restart_interval(5), lm4_model%nml%restart_interval(6) )
 
-         ! subtract the slow time step in seconds
+         ! subtract the fast time step in seconds
          timestamp = date_to_string(lm4_model%Time_restart)
          call ESMF_LogWrite('LM4 init_driver: Time_restart before decrement' //trim(timestamp), ESMF_LOGMSG_INFO)
-         lm4_model%Time_restart = decrement_date(lm4_model%Time_restart, 0,0,0,0,0, lm4_model%nml%dt_lnd_slow)
+         lm4_model%Time_restart = decrement_date(lm4_model%Time_restart, 0,0,0,0,0, lm4_model%dt_secs)
          timestamp = date_to_string(lm4_model%Time_restart)
          call ESMF_LogWrite('LM4 init_driver: Time_restart after decrement' //trim(timestamp), ESMF_LOGMSG_INFO)
 
 
          if (lm4_model%Time_restart < lm4_model%Time_land) then
-            call ESMF_LogWrite('The first intermediate restart time is larger than the start time', &
+            call ESMF_LogWrite('The first intermediate restart time is earlier than the current time', &
                ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
             call ESMF_Finalize(endflag=ESMF_END_ABORT)
 
@@ -372,9 +372,9 @@ contains
          lm4_model%Time_restart = increment_date(lm4_model%Time_land, lm4_model%nml%restart_interval(1), lm4_model%nml%restart_interval(2), &
             lm4_model%nml%restart_interval(3), lm4_model%nml%restart_interval(4), lm4_model%nml%restart_interval(5), lm4_model%nml%restart_interval(6) )
 
-         ! To match behavior of GFDL coupler, advance the restart file timestamp by the slow time step
+         ! To match behavior of GFDL coupler, advance the restart file timestamp by the fast time step
          ! (datestamp is modeltime needed for restart)
-         Time_restart_stamp = increment_date(lm4_model%Time_land, 0,0,0,0,0, lm4_model%nml%dt_lnd_slow)
+         Time_restart_stamp = increment_date(lm4_model%Time_land, 0,0,0,0,0, lm4_model%dt_secs)
          timestamp = date_to_string(Time_restart_stamp)
          call ESMF_LogWrite('write_int_restart restart is written for '//trim(timestamp), ESMF_LOGMSG_INFO)
          call land_model_restart(timestamp)
@@ -454,18 +454,13 @@ contains
          ex_flux_u,    &
          ex_flux_v,    &
          ex_dtaudu_atm,&
-         ex_dtaudv_atm,&
+         ex_dtaudv_atm
 
       ! values added for LM3
 
       !ex_e_q_n    ,  &
 
-      !
-         ex_albedo_fix,        &
-         ex_albedo_vis_dir_fix,&
-         ex_albedo_nir_dir_fix,&
-         ex_albedo_vis_dif_fix,&
-         ex_albedo_nir_dif_fix
+
 
       integer :: tr, n, m ! tracer indices
       integer :: l
@@ -625,30 +620,17 @@ contains
          ex_t_surf4(l) = ex_t_surf(l) ** 4
       enddo
 
-      ! [6.3] save atmos albedo fix and old albedo (for downward SW flux calculations)
-      ! on exchange grid
-      do l = lnd%ls,lnd%le
-         ex_albedo_fix(l) = 0.
-         ex_albedo_vis_dir_fix(l) = 0.
-         ex_albedo_nir_dir_fix(l) = 0.
-         ex_albedo_vis_dif_fix(l) = 0.
-         ex_albedo_nir_dif_fix(l) = 0.
-      enddo
-
+      ! ignore '_fix' albedos in original code, just send land albedos for export
+      lm4_model%atm_sfc%albedo_vis_dir = lm4_model%From_lnd%albedo_vis_dir(:,ntile)
+      lm4_model%atm_sfc%albedo_nir_dir = lm4_model%From_lnd%albedo_nir_dir(:,ntile)
+      lm4_model%atm_sfc%albedo_vis_dif = lm4_model%From_lnd%albedo_vis_dif(:,ntile)
+      lm4_model%atm_sfc%albedo_nir_dif = lm4_model%From_lnd%albedo_nir_dif(:,ntile)      
 
       ! TODO: convert these from  xgrid and Land_Ice_Atmos_Boundary to atmos_land_boundary_type?
       ! [6.2] put relevant quantities onto atmospheric boundary
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%t,         'ATM', ex_t_surf4  ,  xmap_sfc, complete=.false.)
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%frac_open_sea,'ATM',ex_frac_open_sea, xmap_sfc)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo,    'ATM', ex_albedo   ,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo_vis_dir,    'ATM',   &
-      !      ex_albedo_vis_dir   ,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo_nir_dir,    'ATM',   &
-      !      ex_albedo_nir_dir   ,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo_vis_dif,    'ATM',   &
-      !      ex_albedo_vis_dif   ,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%albedo_nir_dif,    'ATM',   &
-      !      ex_albedo_nir_dif   ,  xmap_sfc, complete=.false.)
+
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%rough_mom, 'ATM', ex_rough_mom,  xmap_sfc, complete=.false.)
       ! call get_from_xgrid (Land_Ice_Atmos_Boundary%land_frac, 'ATM', ex_land_frac,  xmap_sfc, complete=.false.)
 
@@ -1064,6 +1046,8 @@ contains
          lm4_model%atm_sfc%shflx = ex_flux_t  ! SH
          lm4_model%atm_sfc%lhflx = ex_tr_surf_new(:,isphum)  ! LH
       endif
+
+      lm4_model%atm_sfc%t_surf = ex_t_surf_new 
 
       ! !=======================================================================
       ! !-------------------- diagnostics section ------------------------------
