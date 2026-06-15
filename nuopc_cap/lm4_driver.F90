@@ -40,10 +40,10 @@ module lm4_driver
 
 
    public :: lm4_nml_read
+   public :: debug_diag
    public :: init_driver, end_driver
    public :: sfc_boundary_layer, update_atmos_model_down, flux_down_from_atmos, flux_up_to_atmos
    public :: write_int_restart
-   public :: debug_diag
 
 
    ! --- namelist of vars originally from flux exchange nml
@@ -1211,96 +1211,23 @@ contains
    !! Write out structured grid diagnostic history
    !! ============================================================================
    subroutine debug_diag(lm4_model)
-      ! This is a quick and dirty diagnostic routine to write out some fields
 
-      use mpp_domains_mod,  only : mpp_get_ntile_count
-      use diag_manager_mod, only : diag_axis_init, register_static_field, &
-         register_diag_field, diag_field_add_attribute, send_data
-      use time_manager_mod,     only: time_type
+      use land_chksum_mod, only : get_land_chksum
 
-
-      type(lm4_type), intent(inout) :: lm4_model
+      type(lm4_type), intent(in) :: lm4_model
 
       ! local variables
       character(len=32) :: mod_name = 'lm4_dbug_diag'  ! diag module name for history
-      logical           :: first_call = .true.
-      real              :: missval    = -1.0e+20
-      logical           :: used
+      character(len=32) :: chksum
 
+      ! get checksum of all imported data, to track changes in data from time step to time step
 
-      ! only run if first call,
-      if (first_call) then
-         first_call = .false.
-
-         ! initialize output on structure grid, with cell_area
-
-         if(mpp_get_ntile_count(lnd%sg_domain)==1) then
-            ! grid has just one tile, so we assume that the grid is regular lat-lon
-            ! define longitude axes and its edges
-            id_lonb = diag_axis_init ('lonb', lnd%coord_glonb, 'degrees_E', 'X', 'longitude edges', &
-               set_name=mod_name, domain2=lnd%sg_domain )
-            id_lon  = diag_axis_init ('lon',  lnd%coord_glon, 'degrees_E', 'X',   'longitude', &
-               set_name=mod_name,  edges=id_lonb, domain2=lnd%sg_domain )
-
-            ! define latitude axes and its edges
-            id_latb = diag_axis_init ('latb', lnd%coord_glatb, 'degrees_N', 'Y', 'latitude edges',  &
-               set_name=mod_name,  domain2=lnd%sg_domain   )
-            id_lat = diag_axis_init ('lat',  lnd%coord_glat, 'degrees_N', 'Y', 'latitude', &
-               set_name=mod_name, edges=id_latb, domain2=lnd%sg_domain)
-         else
-            id_lon = diag_axis_init ( 'grid_xt', [(real(i),i=1,size(lnd%coord_glon))], 'degrees_E', 'X', &
-               'T-cell longitude', set_name=mod_name,  domain2=lnd%sg_domain)
-            id_lat = diag_axis_init ( 'grid_yt', [(real(i),i=1,size(lnd%coord_glat))], 'degrees_N', 'Y', &
-               'T-cell latitude', set_name=mod_name,  domain2=lnd%sg_domain)
-         endif
-
-         ! register cell area on structured grid
-         id_cellarea = register_static_field( mod_name, 'cell_area', (/id_lon, id_lat/), &
-            'total area in grid cell', 'm2', missing_value=-1.0 )
-         call diag_field_add_attribute(id_cellarea,'cell_methods','area: sum')
-
-         associate ( &
-            axes => (/ id_lon, id_lat /), &
-            ltime => lm4_model%Time_land  &
-            )
-
-            ! register other fields on structured grid
-            id_t_bot   = register_diag_field(mod_name, 't_bot', axes, ltime, 'bottom temperature', 'K', missing_value=missval )
-            id_p_bot   = register_diag_field(mod_name, 'p_bot', axes, ltime, 'bottom pressure', 'Pa', missing_value=missval )
-            id_z_bot   = register_diag_field(mod_name, 'z_bot', axes, ltime, 'bottom depth', 'm', missing_value=missval )
-            id_u_bot   = register_diag_field(mod_name, 'u_bot', axes, ltime, 'bottom u velocity', 'm/s', missing_value=missval )
-            id_v_bot   = register_diag_field(mod_name, 'v_bot', axes, ltime, 'bottom v velocity', 'm/s', missing_value=missval )
-            id_q_bot   = register_diag_field(mod_name, 'q_bot', axes, ltime, 'bottom specific humidity', 'kg/kg', missing_value=missval )
-            id_p_surf  = register_diag_field(mod_name, 'p_surf', axes, ltime, 'surface pressure', 'Pa', missing_value=missval )
-            id_lprec   = register_diag_field(mod_name, 'lprec', axes, ltime, 'liquid precipitation', 'kg/m2/s', missing_value=missval )
-            id_fprec   = register_diag_field(mod_name, 'fprec', axes, ltime, 'frozen precipitation', 'kg/m2/s', missing_value=missval )
-            id_flux_lw = register_diag_field(mod_name, 'flux_lw', axes, ltime, 'longwave flux down', 'W/m2', missing_value=missval )
-            id_swdn_vf = register_diag_field(mod_name, 'sw_down_vis_dif', axes, ltime,  'shortwave downwelling vis. diffuse radiation', 'W/m2', missing_value=missval )
-            id_flux_sw_dn_vdf = register_diag_field(mod_name, 'flux_sw_down_vis_dif', axes, ltime, 'vis. diff. shortwave flux down', 'W/m2', missing_value=missval )
-            id_flux_sw_dn_vr  = register_diag_field(mod_name, 'flux_sw_down_vis_dir', axes, ltime, 'vis. dir. shortwave flux down', 'W/m2', missing_value=missval )
-
-
-         end associate
-
-         ! send out static data
-         if (id_cellarea > 0)       used = send_data(id_cellarea,       lnd%sg_cellarea,                           lm4_model%Time_land)
-
-      endif ! first_call
-
-      ! send out data to be written
-      if (id_t_bot > 0)          used = send_data(id_t_bot,          lm4_model%atm_forc2d%t_bot,                lm4_model%Time_land)
-      if (id_p_bot > 0)          used = send_data(id_p_bot,          lm4_model%atm_forc2d%p_bot,                lm4_model%Time_land)
-      if (id_z_bot > 0)          used = send_data(id_z_bot,          lm4_model%atm_forc2d%z_bot,                lm4_model%Time_land)
-      if (id_u_bot > 0)          used = send_data(id_u_bot,          lm4_model%atm_forc2d%u_bot,                lm4_model%Time_land)
-      if (id_v_bot > 0)          used = send_data(id_v_bot,          lm4_model%atm_forc2d%v_bot,                lm4_model%Time_land)
-      if (id_q_bot > 0)          used = send_data(id_q_bot,          lm4_model%atm_forc2d%q_bot,                lm4_model%Time_land)
-      if (id_p_surf > 0)         used = send_data(id_p_surf,         lm4_model%atm_forc2d%p_surf,               lm4_model%Time_land)
-      if (id_lprec > 0)          used = send_data(id_lprec,          lm4_model%atm_forc2d%lprec,                lm4_model%Time_land)
-      if (id_fprec > 0)          used = send_data(id_fprec,          lm4_model%atm_forc2d%fprec,                lm4_model%Time_land)
-      if (id_flux_lw > 0)        used = send_data(id_flux_lw,        lm4_model%atm_forc2d%flux_lw,              lm4_model%Time_land)
-      if (id_swdn_vf > 0)        used = send_data(id_swdn_vf,        lm4_model%atm_forc2d%flux_sw_down_vis_dif, lm4_model%Time_land)
-      if (id_flux_sw_dn_vdf > 0) used = send_data(id_flux_sw_dn_vdf, lm4_model%atm_forc2d%flux_sw_down_vis_dif, lm4_model%Time_land)
-      if (id_flux_sw_dn_vr > 0)  used = send_data(id_flux_sw_dn_vr,  lm4_model%atm_forc2d%flux_sw_down_vis_dir, lm4_model%Time_land)
+      ! only if on root PE
+      if (mpp_pe() == 0) then
+         call get_land_chksum(lm4_model%atm_forc%z_bot, chksum)
+         write(logmsg,'(A,A)') 'Checksum for z_bot = ', chksum
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+      endif
 
 
 
@@ -1309,121 +1236,6 @@ contains
 
 
 
-
-
-   !! Set up unstructured grid diagnostics
-   ! initialize horizontal axes for land grid so that all sub-modules can use them,
-   ! instead of creating their own
-   !! ============================================================================
-   subroutine land_diag_init(clonb, clatb, clon, clat, time, domain, id_band, id_ug)
-
-
-      !Inputs/outputs
-      real,dimension(:),intent(in) :: clonb   !<longitudes of grid cells vertices
-      real,dimension(:),intent(in) :: clatb   !<latitudes of grid cells vertices
-      real,dimension(:),intent(in) :: clon    !<Longitude of grid cell centers.
-      real,dimension(:),intent(in) :: clat    !<Latitude of grid cell centers
-      type(time_type),intent(in)   :: time    !<Initial time for diagnostic fields.
-      type(domainUG), intent(in)   :: domain  !<
-      integer,intent(out)          :: id_band !<"band" axis id.
-      integer,intent(out)          :: id_ug   !<Unstructured axis id.
-
-      ! ---- local vars ----------------------------------------------------------
-      character(len=32) :: module_name = 'UG_dbug_diag'  ! diag module name for history
-
-      integer :: nlon, nlat       ! sizes of respective axes
-      integer             :: axes(1)        ! Array of axes for 1-D unstructured fields.
-      integer             :: ug_dim_size    ! Size of the unstructured axis
-      integer,allocatable :: ug_dim_data(:) ! Unstructured axis data.
-      ! integer             :: id_lon, id_lonb
-      ! integer             :: id_lat, id_latb
-      character(32) :: name       ! tracer name
-
-      ! Register the unstructured axis for the unstructured domain.
-      call mpp_get_UG_compute_domain(domain, size=ug_dim_size)
-      if (.not. allocated(ug_dim_data)) then
-         allocate(ug_dim_data(ug_dim_size))
-      endif
-      call mpp_get_UG_domain_grid_index(domain, ug_dim_data)
-      !--- grid_index needs to be starting from 0.
-      ug_dim_data = ug_dim_data - 1
-      id_ug = diag_axis_init("grid_index",  real(ug_dim_data), "none", "U", long_name="grid indices", &
-         set_name=trim(module_name), DomainU=domain, aux="geolon_t geolat_t")
-      if (allocated(ug_dim_data)) then
-         deallocate(ug_dim_data)
-      endif
-
-      ! Register horizontal axes that are required by the post-processing so that the output
-      ! files can be "decompressed": converted from unstructured back to lon-lat or cubic sphere.
-      ! The "grid_xt" and "grid_yt" axes should run from 1 to the total number of x- and
-      ! y-points on cubic sphere face. It is assumed that all faces tiles contain the same
-      ! number of x- and y-points.
-      nlon = size(clon)
-      nlat = size(clat)
-      if(mpp_get_UG_domain_ntiles(lnd%ug_domain)==1) then
-         ! grid has just one tile, so we assume that the grid is regular lat-lon
-         ! define geographic axes and its edges
-         id_lonb = diag_axis_init ('lonb', clonb, 'degrees_E', 'X', 'longitude edges', set_name=trim(module_name))
-         id_lon  = diag_axis_init ('lon',  clon,  'degrees_E', 'X', 'longitude', set_name=trim(module_name),  edges=id_lonb)
-         id_latb = diag_axis_init ('latb', clatb, 'degrees_N', 'Y', 'latitude edges', set_name=trim(module_name))
-         id_lat  = diag_axis_init ('lat',  clat,  'degrees_N', 'Y', 'latitude', set_name=trim(module_name), edges=id_latb)
-         ! add "compress" attribute to the unstructured grid axis
-         call diag_axis_add_attribute(id_ug, "compress", "lat lon")
-      else
-         id_lon = diag_axis_init ( 'grid_xt', (/(real(i),i=1,nlon)/), 'degrees_E', 'X', &
-            'T-cell longitude', set_name=trim(module_name) )
-         id_lat = diag_axis_init ( 'grid_yt', (/(real(i),i=1,nlat)/), 'degrees_N', 'Y', &
-            'T-cell latitude', set_name=trim(module_name) )
-         ! add "compress" attribute to the unstructured grid axis
-         call diag_axis_add_attribute(id_ug, "compress", "grid_yt grid_xt")
-      endif
-
-      id_band = diag_axis_init ('band',  (/1.0,2.0/), 'unitless', 'Z', 'spectral band', set_name=trim(module_name) )
-
-      ! Set up an array of axes ids, for convenience.
-      axes(1) = id_ug
-
-      ! register auxiliary coordinate variables
-      id_geolon_t = register_static_field ( module_name, 'geolon_t', axes, &
-         'longitude of grid cell centers', 'degrees_E', missing_value = -1.0e+20 )
-      id_geolat_t = register_static_field ( module_name, 'geolat_t', axes, &
-         'latitude of grid cell centers', 'degrees_N', missing_value = -1.0e+20 )
-
-      ! register static diagnostic fields
-      id_landfrac = register_static_field ( module_name, 'land_frac', axes, &
-         'fraction of land in grid cell','unitless', missing_value=-1.0, area=id_cellarea)
-      call diag_field_add_attribute(id_landfrac,'ocean_fillvalue',0.0)
-
-      ! register areas and fractions for the rest of the diagnostic fields
-      call register_tiled_area_fields(module_name, axes, time, id_area, id_frac)
-
-      ! set the default filter (for area and subsampling) for consequent calls to
-      ! register_tiled_diag_field
-      !call set_default_diag_filter('land')
-
-      ! register regular (dynamic) diagnostic fields
-
-      id_ntiles = register_tiled_diag_field(module_name,'ntiles', axes,  &
-         time, 'number of tiles', 'unitless', missing_value=-1.0, op='sum')
-
-
-      iug_q_atm       = register_tiled_diag_field(module_name, "q_atm"      , axes, time, "q_atm"      , "kg/kg", missing_value=-1.0e+20)
-      iug_t_atm       = register_tiled_diag_field(module_name, "t_atm"      , axes, time, "t_atm"      , "K"    , missing_value=-1.0e+20)
-      iug_u_atm       = register_tiled_diag_field(module_name, "u_atm"      , axes, time, "u_atm"      , "m/s"  , missing_value=-1.0e+20)
-      iug_v_atm       = register_tiled_diag_field(module_name, "v_atm"      , axes, time, "v_atm"      , "m/s"  , missing_value=-1.0e+20)
-      iug_p_atm       = register_tiled_diag_field(module_name, "p_atm"      , axes, time, "p_atm"      , "Pa"   , missing_value=-1.0e+20)
-      iug_z_atm       = register_tiled_diag_field(module_name, "z_atm"      , axes, time, "z_atm"      , "m"    , missing_value=-1.0e+20)
-      iug_p_surf      = register_tiled_diag_field(module_name, "p_surf"     , axes, time, "p_surf"     , "Pa"   , missing_value=-1.0e+20)
-      iug_t_surf      = register_tiled_diag_field(module_name, "t_surf"     , axes, time, "t_surf"     , "K"    , missing_value=-1.0e+20)
-      iug_t_ca        = register_tiled_diag_field(module_name, "t_ca"       , axes, time, "t_ca"       , "K"    , missing_value=-1.0e+20)
-      iug_q_surf      = register_tiled_diag_field(module_name, "q_surf"     , axes, time, "q_surf"     , "kg/kg", missing_value=-1.0e+20)
-      iug_rough_mom   = register_tiled_diag_field(module_name, "rough_mom"  , axes, time, "rough_mom"  , "m"    , missing_value=-1.0e+20)
-      iug_rough_heat  = register_tiled_diag_field(module_name, "rough_heat" , axes, time, "rough_heat" , "m"    , missing_value=-1.0e+20)
-      iug_rough_moist = register_tiled_diag_field(module_name, "rough_moist", axes, time, "rough_moist", "m"    , missing_value=-1.0e+20)
-      iug_rough_scale = register_tiled_diag_field(module_name, "rough_scale", axes, time, "rough_scale", "m"    , missing_value=-1.0e+20)
-      iug_gust        = register_tiled_diag_field(module_name, "gust"       , axes, time, "gust"       , "m/s"  , missing_value=-1.0e+20)
-
-   end subroutine land_diag_init
 
 
    !! Wrap up
