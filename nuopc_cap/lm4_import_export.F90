@@ -29,6 +29,7 @@ module lm4_import_export
    public  :: import_fields
    public  :: export_fields
    public  :: correct_import_fields
+   public  :: print_import_checksums
 
    private :: fldlist_add
    private :: fldlist_realize
@@ -510,11 +511,14 @@ contains
 
 
       ! only do this on 1st time step, when have active atm model
-      if (lm4_model%nml%cpl2atm .and. first_call) then
+      if (.not. lm4_model%control%restart .and. lm4_model%nml%cpl2atm .and. first_call) then
          write( *,*) 'JPp using init value of lm4_model%atm_forc%p_surf'
          lm4_model%atm_forc%p_surf = 97015
          first_call = .false.
       end if
+      ! TMP DEBUG do this all the time
+      lm4_model%atm_forc%p_surf = 97015
+
 
       if (ie_debug > 0) then ! Also want Structured Grid data
          call state_getimport_2d(importState, 'Sa_z',       lm4data_2d=lm4_model%atm_forc2d%z_bot,   rc=rc)
@@ -668,7 +672,6 @@ contains
          call state_setexport_2d(exportState, 'Sl_anidr',  lm4data_1d=lm4_model%atm_sfc%albedo_nir_dir, rc=rc)
          call state_setexport_2d(exportState, 'Sl_avsdf',  lm4data_1d=lm4_model%atm_sfc%albedo_vis_dif, rc=rc)
          call state_setexport_2d(exportState, 'Sl_anidf',  lm4data_1d=lm4_model%atm_sfc%albedo_nir_dif, rc=rc)
-
 
 
 
@@ -857,6 +860,85 @@ contains
 
    end subroutine state_getfldptr
 
+
+   !=============================================================================
+   subroutine print_import_checksums(gcomp, lm4_model,rc)
+
+      use ESMF,  only: ESMF_SUCCESS, ESMF_LogWrite, ESMF_LOGMSG_INFO
+      use ESMF,  only: ESMF_VM, ESMF_VMGetCurrent, ESMF_VMGet
+      use land_chksum_mod, only: get_land_chksum
+
+      ! input/output variables
+      type(ESMF_GridComp), intent(in)  :: gcomp
+      type(lm4_type)      , intent(in) :: lm4_model
+      integer,             intent(out) :: rc
+
+      ! local variables
+      type(ESMF_VM)                  :: vm
+      integer                        :: mytask
+      real(R8), pointer              :: fld1d(:)
+      real(R8), pointer              :: fld2d(:,:)
+      real(R8), pointer              :: fld3d(:,:,:)
+      character(len=32)             :: chksum
+      character(len=256)            :: logmsg
+      integer                       :: n
+      character(len=*), parameter   :: subname='JP TMP (lm4_import_export:print_import_checksums)'
+
+      rc = ESMF_SUCCESS
+
+      call ESMF_VMGetCurrent(vm, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+      call ESMF_VMGet(vm, localPet=mytask, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+      if (mytask == 0) then
+         call ESMF_LogWrite(subname//' printing checksums on zero task', ESMF_LOGMSG_INFO)    
+
+         call print_lm4_checksum('JP checksum z_bot', optional_1dr=lm4_model%atm_forc%z_bot)
+         call print_lm4_checksum('JP checksum t_bot', optional_1dr=lm4_model%atm_forc%t_bot)
+         call print_lm4_checksum('JP checksum p_bot', optional_1dr=lm4_model%atm_forc%p_bot)
+         call print_lm4_checksum('JP checksum u_bot', optional_1dr=lm4_model%atm_forc%u_bot)
+         call print_lm4_checksum('JP checksum v_bot', optional_1dr=lm4_model%atm_forc%v_bot)
+         call print_lm4_checksum('JP checksum q_bot', optional_1dr=lm4_model%atm_forc%q_bot)
+         call print_lm4_checksum('JP checksum p_surf', optional_1dr=lm4_model%atm_forc%p_surf)
+         call print_lm4_checksum('JP checksum flux_lw', optional_1dr=lm4_model%atm_forc%flux_lw)
+         call print_lm4_checksum('JP checksum flux_sw_down_vis_dif', optional_1dr=lm4_model%atm_forc%flux_sw_down_vis_dif)
+         call print_lm4_checksum('JP checksum flux_sw_down_vis_dir', optional_1dr=lm4_model%atm_forc%flux_sw_down_vis_dir)
+         call print_lm4_checksum('JP checksum flux_sw_down_nir_dif', optional_1dr=lm4_model%atm_forc%flux_sw_down_nir_dif)
+         call print_lm4_checksum('JP checksum flux_sw_down_nir_dir', optional_1dr=lm4_model%atm_forc%flux_sw_down_nir_dir)      
+      
+      end if
+
+   end subroutine print_import_checksums
+
+   subroutine print_lm4_checksum(var_name, optional_1dr, optional_2dr)
+
+      use ESMF,  only: ESMF_SUCCESS, ESMF_LogWrite, ESMF_LOGMSG_INFO
+      use land_chksum_mod, only: get_land_chksum
+
+      character(len=*), intent(in) :: var_name
+      real(R8), pointer, optional :: optional_1dr(:)
+      real(R8), pointer, optional :: optional_2dr(:,:)
+      character(len=32)           :: chksum
+      character(len=256)          :: logmsg
+
+      if (present(optional_1dr)) then
+         ! TMP chksum call is stalling, test this subroutine by just doing sum instead of chksum
+         write (chksum, *) sum(optional_1dr)
+         ! call get_land_chksum(optional_1dr, chksum)
+      else if (present(optional_2dr)) then
+         ! call get_land_chksum(optional_2dr, chksum)
+         write (chksum, *) sum(optional_2dr)
+      else
+         call ESMF_LogWrite('No data provided for checksum calculation for '//trim(var_name), ESMF_LOGMSG_INFO)
+         return
+      end if
+
+
+      write(logmsg,'(A,A)') 'JP Checksum for '//trim(var_name)//' = ', chksum
+      call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
+   end subroutine print_lm4_checksum
 
 
    !=============================================================================

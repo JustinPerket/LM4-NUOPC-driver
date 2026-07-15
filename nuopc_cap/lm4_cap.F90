@@ -4,7 +4,7 @@ module lm4_cap_mod
    ! LM4 Component
    !-----------------------------------------------------------------------------
 
-   use ESMF                  ! TODO: limit to only what is needed
+   use ESMF                  
    use NUOPC,                only: NUOPC_CompDerive, NUOPC_CompSetEntryPoint, NUOPC_CompSpecialize
    use NUOPC,                only: NUOPC_CompFilterPhaseMap, NUOPC_CompAttributeGet, NUOPC_CompAttributeSet
    use NUOPC_Model,          only: model_routine_SS           => SetServices
@@ -30,7 +30,8 @@ module lm4_cap_mod
    use diag_manager_mod,     only: diag_manager_init, diag_manager_end, &
                                       diag_manager_set_time_end
 
-   use lm4_driver,           only: lm4_nml_read, init_driver, end_driver, debug_diag, write_int_restart
+   use lm4_driver,           only: lm4_nml_read, init_driver, end_driver, write_int_restart
+   use lm4_driver,           only: lm4_import_checksum, lm4_export_checksum  ! TMP DEBUG
 
    use land_model_mod,       only: land_model_init, land_model_end
    use land_data_mod,        only: land_data_type, atmos_land_boundary_type, lnd
@@ -425,8 +426,6 @@ contains
          lm4_model%cpl_scalar%flds_scalar_name = trim(cvalue)
          call ESMF_LogWrite(trim(subname)//' flds_scalar_name = '//lm4_model%cpl_scalar%flds_scalar_name, ESMF_LOGMSG_INFO)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-         ! else
-         !    call shr_sys_abort(subname//'Need to set attribute ScalarFieldName')
       endif
 
       call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldCount", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
@@ -436,8 +435,6 @@ contains
          write(logmsg,*) lm4_model%cpl_scalar%flds_scalar_num
          call ESMF_LogWrite(trim(subname)//' flds_scalar_num = '//trim(logmsg), ESMF_LOGMSG_INFO)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-         ! else
-         !    call shr_sys_abort(subname//'Need to set attribute ScalarFieldCount')
       endif
 
       call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxGridNX", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
@@ -465,6 +462,14 @@ contains
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
       endif
 
+      call NUOPC_CompAttributeGet(gcomp, name='start_type', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      if (isPresent .and. isSet .and. trim(cvalue) == 'continue') then
+         lm4_model%control%restart = .true.
+      else
+         lm4_model%control%restart = .false.
+      endif
+
       ! ------------------------------------
       ! Realize the actively coupled fields
       ! ------------------------------------
@@ -488,6 +493,7 @@ contains
       use lm4_driver,           only: sfc_boundary_layer, update_atmos_model_down, &
                                       flux_down_from_atmos, flux_up_to_atmos
       use land_model_mod,       only: update_land_model_fast, update_land_model_slow
+      use land_model_mod,       only: atm_lnd_bnd_type_chksum, land_data_type_chksum ! TMP DEBUG
       use ESMF, only: ESMF_ClockPrint, ESMF_AlarmIsRinging ! TMP DEBUG
 
       ! Arguments
@@ -506,9 +512,9 @@ contains
       integer :: sec
       integer,dimension(6)        :: currdate ! for FMS time
 
-      ! JP tmp debug
       integer                  :: time_sec   ! current time in seconds
       type(ESMF_TimeInterval)  :: model_time ! current time as ESMF_TimeInterval
+
       character(len=CL)        :: logmsg
       ! END TMP DEBUG
 
@@ -528,12 +534,29 @@ contains
       call import_fields(gcomp, lm4_model, rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
+      ! ! TMP JP print checksums for connected import fields
+
+      call ESMF_ClockGet(dclock,  CurrTime=CurrTime, currSimTime=model_time, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return      
+      call ESMF_TimeGet (CurrTime,                           &
+         YY=currdate(1), MM=currdate(2), DD=currdate(3), &
+         H=currdate(4),  M =currdate(5), S =currdate(6), RC=rc )
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
+
+      write(logmsg,*) currdate
+      call ESMF_LogWrite(trim(subname)//'Land CurrTime = '//trim(logmsg), ESMF_LOGMSG_INFO)
+
+      call atm_lnd_bnd_type_chksum('From_atm '//trim(logmsg), 1, lm4_model%From_atm)
+      call land_data_type_chksum(  'From_lnd '//trim(logmsg), 1, lm4_model%From_lnd)
+      call lm4_import_checksum('lm4_model%atm_forc '//trim(logmsg), 1, lm4_model)
+      call lm4_export_checksum('lm4_model%atm_sfc '//trim(logmsg), 1, lm4_model)
+      ! JP TMP DEBUG END
+
       call correct_import_fields(gcomp, lm4_model, rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
 
-      ! JP TMP DEBUG
-      call debug_diag(lm4_model)
+
 
       !-------------------------------------------------------------------------------
       ! Run fast LM4 calls
@@ -549,8 +572,6 @@ contains
       if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
          call flux_up_to_atmos(lm4_model)
       end if
-
-
 
       call ESMF_ClockGet(dclock,  CurrTime=CurrTime, currSimTime=model_time, rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -569,9 +590,11 @@ contains
       lm4_model%Time_land = set_date (currdate(1), currdate(2), currdate(3),  &
          currdate(4), currdate(5), currdate(6))      
 
-      ! JP TMP DEBUG
-      ! write(logmsg,*) time_sec
-      ! call ESMF_LogWrite(trim(subname)//'LM4 driver currSimTime: '//trim(logmsg), ESMF_LOGMSG_INFO)
+      
+      call atm_lnd_bnd_type_chksum('From_atm '//trim(logmsg), 2, lm4_model%From_atm)
+      call land_data_type_chksum(  'From_lnd '//trim(logmsg), 2, lm4_model%From_lnd)
+      call lm4_import_checksum('lm4_model%atm_forc '//trim(logmsg), 2, lm4_model)
+      call lm4_export_checksum('lm4_model%atm_sfc '//trim(logmsg), 2, lm4_model)      
       
       !-------------------------------------------------------------------------------
       ! Run slow timescale LM4 calls
@@ -591,6 +614,11 @@ contains
       if (ChkErr(rc,__LINE__,u_FILE_u)) return      
 
       call ESMF_LogWrite(subname//' finished', ESMF_LOGMSG_INFO)
+
+      call atm_lnd_bnd_type_chksum('From_atm '//trim(logmsg), 3, lm4_model%From_atm)
+      call land_data_type_chksum(  'From_lnd '//trim(logmsg), 3, lm4_model%From_lnd)      
+      call lm4_import_checksum('lm4_model%atm_forc '//trim(logmsg), 3, lm4_model)
+      call lm4_export_checksum('lm4_model%atm_sfc '//trim(logmsg), 3, lm4_model)      
 
    end subroutine ModelAdvance
 

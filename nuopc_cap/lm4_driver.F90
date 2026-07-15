@@ -40,7 +40,7 @@ module lm4_driver
 
 
    public :: lm4_nml_read
-   public :: debug_diag
+   public :: lm4_import_checksum, lm4_export_checksum
    public :: init_driver, end_driver
    public :: sfc_boundary_layer, update_atmos_model_down, flux_down_from_atmos, flux_up_to_atmos
    public :: write_int_restart
@@ -1208,33 +1208,134 @@ contains
 
    end subroutine flux_up_to_atmos
 
-   !! Write out structured grid diagnostic history
    !! ============================================================================
-   subroutine debug_diag(lm4_model)
+   subroutine lm4_import_checksum(id, timestep, lm4_model)
 
-      use land_chksum_mod, only : get_land_chksum
+      use mpp_mod, only : mpp_chksum
+      use fms_mod, only : stdout
 
+      character(len=*), intent(in) :: id ! Label to differentiate where this
+                                         ! routine in being called from.
+      integer         , intent(in) :: timestep ! An integer to indicate which
+                                               ! timestep this routine is being called for.      
       type(lm4_type), intent(in) :: lm4_model
 
       ! local variables
       character(len=32) :: mod_name = 'lm4_dbug_diag'  ! diag module name for history
       character(len=32) :: chksum
+      integer ::   outunit
+
 
       ! get checksum of all imported data, to track changes in data from time step to time step
+      outunit = stdout()      
 
-      ! only if on root PE
-      if (mpp_pe() == 0) then
-         call get_land_chksum(lm4_model%atm_forc%z_bot, chksum)
-         write(logmsg,'(A,A)') 'Checksum for z_bot = ', chksum
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-      endif
+      write(outunit,*) 'BEGIN CHECKSUM(lm4_import):: ', id, timestep
+
+      ! Get Unstructured Grid data
+      write(outunit,100) 'lm4_model%atm_forc%z_bot                ', mpp_chksum(lm4_model%atm_forc%z_bot)
+      write(outunit,100) 'lm4_model%atm_forc%t_bot                ', mpp_chksum(lm4_model%atm_forc%t_bot)
+      write(outunit,100) 'lm4_model%atm_forc%p_bot                ', mpp_chksum(lm4_model%atm_forc%p_bot)
+      write(outunit,100) 'lm4_model%atm_forc%p_bot                ', mpp_chksum(lm4_model%atm_forc%p_bot)
+      write(outunit,100) 'lm4_model%atm_forc%u_bot                ', mpp_chksum(lm4_model%atm_forc%u_bot)
+      write(outunit,100) 'lm4_model%atm_forc%v_bot                ', mpp_chksum(lm4_model%atm_forc%v_bot)
+      write(outunit,100) 'lm4_model%atm_forc%q_bot                ', mpp_chksum(lm4_model%atm_forc%q_bot)
+      write(outunit,100) 'lm4_model%atm_forc%p_surf               ', mpp_chksum(lm4_model%atm_forc%p_surf)
+      write(outunit,100) 'lm4_model%atm_forc%flux_lw              ', mpp_chksum(lm4_model%atm_forc%flux_lw)
+      write(outunit,100) 'lm4_model%atm_forc%flux_sw_down_vis_dif ', mpp_chksum(lm4_model%atm_forc%flux_sw_down_vis_dif)
+      write(outunit,100) 'lm4_model%atm_forc%flux_sw_down_vis_dir ', mpp_chksum(lm4_model%atm_forc%flux_sw_down_vis_dir)
+      write(outunit,100) 'lm4_model%atm_forc%flux_sw_down_nir_dif ', mpp_chksum(lm4_model%atm_forc%flux_sw_down_nir_dif)
+      write(outunit,100) 'lm4_model%atm_forc%flux_sw_down_nir_dir ', mpp_chksum(lm4_model%atm_forc%flux_sw_down_nir_dir)
+
+      100 FORMAT("CHECKSUM::",A40," = ",Z20)
+   end subroutine lm4_import_checksum
+
+   !! ============================================================================
+   subroutine lm4_export_checksum(id, timestep, lm4_model)
+
+      use mpp_mod, only : mpp_chksum
+      use fms_mod, only : stdout
+
+      character(len=*), intent(in) :: id ! Label to differentiate where this
+                                         ! routine in being called from.
+      integer         , intent(in) :: timestep ! An integer to indicate which
+                                               ! timestep this routine is being called for.      
+      type(lm4_type), intent(in) :: lm4_model
+
+      ! local variables
+      character(len=32) :: mod_name = 'lm4_dbug_diag'  ! diag module name for history
+      character(len=32) :: chksum
+      integer ::   outunit
 
 
+      ! get checksum of all imported data, to track changes in data from time step to time step
+      outunit = stdout()      
+
+      write(outunit,*) 'BEGIN CHECKSUM(lm4_export):: ', id, timestep
+
+      ! Get Unstructured Grid data
+      write(outunit,100) 'lm4_model%atm_forc%z_bot                ', mpp_chksum(lm4_model%atm_forc%z_bot)
+      write(outunit,100) 'lm4_model%atm_forc%t_bot                ', mpp_chksum(lm4_model%atm_forc%t_bot)
+      write(outunit,100) 'lm4_model%atm_forc%p_bot                ', mpp_chksum(lm4_model%atm_forc%p_bot)
+      write(outunit,100) 'lm4_model%atm_forc%p_bot                ', mpp_chksum(lm4_model%atm_forc%p_bot)
+      write(outunit,100) 'lm4_model%atm_forc%u_bot                ', mpp_chksum(lm4_model%atm_forc%u_bot)
+      write(outunit,100) 'lm4_model%atm_forc%v_bot                ', mpp_chksum(lm4_model%atm_forc%v_bot)
+      write(outunit,100) 'lm4_model%atm_forc%q_bot                ', mpp_chksum(lm4_model%atm_forc%q_bot)
+      write(outunit,100) 'lm4_model%atm_forc%p_surf               ', mpp_chksum(lm4_model%atm_forc%p_surf)
+      write(outunit,100) 'lm4_model%atm_forc%flux_lw              ', mpp_chksum(lm4_model%atm_forc%flux_lw)
+      write(outunit,100) 'lm4_model%atm_forc%flux_sw_down_vis_dif ', mpp_chksum(lm4_model%atm_forc%flux_sw_down_vis_dif)
+      write(outunit,100) 'lm4_model%atm_forc%flux_sw_down_vis_dir ', mpp_chksum(lm4_model%atm_forc%flux_sw_down_vis_dir)
+      write(outunit,100) 'lm4_model%atm_forc%flux_sw_down_nir_dif ', mpp_chksum(lm4_model%atm_forc%flux_sw_down_nir_dif)
+      write(outunit,100) 'lm4_model%atm_forc%flux_sw_down_nir_dir ', mpp_chksum(lm4_model%atm_forc%flux_sw_down_nir_dir)
+
+      write(outunit,100) 'lm4_model%atm_sfc%lhflx          ', mpp_chksum(lm4_model%atm_sfc%lhflx)
+      write(outunit,100) 'lm4_model%atm_sfc%shflx          ', mpp_chksum(lm4_model%atm_sfc%shflx)
+      write(outunit,100) 'lm4_model%atm_sfc%q_surf         ', mpp_chksum(lm4_model%atm_sfc%q_surf)
+      write(outunit,100) 'lm4_model%atm_sfc%t_surf         ', mpp_chksum(lm4_model%atm_sfc%t_surf)
+      write(outunit,100) 'lm4_model%atm_sfc%albedo_vis_dir ', mpp_chksum(lm4_model%atm_sfc%albedo_vis_dir)
+      write(outunit,100) 'lm4_model%atm_sfc%albedo_nir_dir ', mpp_chksum(lm4_model%atm_sfc%albedo_nir_dir) 
+      write(outunit,100) 'lm4_model%atm_sfc%albedo_vis_dif ', mpp_chksum(lm4_model%atm_sfc%albedo_vis_dif)
+      write(outunit,100) 'lm4_model%atm_sfc%albedo_nir_dif ', mpp_chksum(lm4_model%atm_sfc%albedo_nir_dif)
 
 
-   end subroutine debug_diag
+      100 FORMAT("CHECKSUM::",A40," = ",Z20)
+   end subroutine lm4_export_checksum
+
+! ! ===========================================================================
+! !  Prints checksums of the various fields in the land_data_type.
+! subroutine land_data_type_chksum(id, timestep, land)
+!     character(len=*), intent(in) :: id ! Label to differentiate where this
+!         ! routine in being called from.
+!     integer         , intent(in) :: timestep ! An integer to indicate which
+!         ! timestep this routine is being called for.
+!     type(land_data_type), intent(in) :: land
+!     integer ::   n, outunit, k, j
+
+!     outunit = stdout()
+
+!     write(outunit,*) 'BEGIN CHECKSUM(land_data_type):: ', id, timestep
+
+!     write(outunit,100) 'land%tile_size         ',mpp_chksum(land%tile_size)
+!     write(outunit,100) 'land%t_surf            ',mpp_chksum(land%t_surf)
+!     write(outunit,100) 'land%t_ca              ',mpp_chksum(land%t_ca)
+!     write(outunit,100) 'land%albedo            ',mpp_chksum(land%albedo)
+!     write(outunit,100) 'land%albedo_vis_dir    ',mpp_chksum(land%albedo_vis_dir)
+!     write(outunit,100) 'land%albedo_nir_dir    ',mpp_chksum(land%albedo_nir_dir)
+!     write(outunit,100) 'land%albedo_vis_dif    ',mpp_chksum(land%albedo_vis_dif)
+!     write(outunit,100) 'land%albedo_nir_dif    ',mpp_chksum(land%albedo_nir_dif)
+!     write(outunit,100) 'land%rough_mom         ',mpp_chksum(land%rough_mom)
+!     write(outunit,100) 'land%rough_heat        ',mpp_chksum(land%rough_heat)
+!     write(outunit,100) 'land%rough_scale       ',mpp_chksum(land%rough_scale)
+
+!     do n = 1, size(land%tr,3)
+!     write(outunit,100) 'land%tr                ',mpp_chksum(land%tr(:,:,n))
+!     enddo
+!     write(outunit,100) 'land%discharge         ',mpp_chksum(land%discharge)
+!     write(outunit,100) 'land%discharge_snow    ',mpp_chksum(land%discharge_snow)
+!     write(outunit,100) 'land%discharge_heat    ',mpp_chksum(land%discharge_heat)
 
 
+! 100 FORMAT("CHECKSUM::",A32," = ",Z20)
+! end subroutine land_data_type_chksum
 
 
 
