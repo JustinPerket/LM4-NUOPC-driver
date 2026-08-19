@@ -512,12 +512,10 @@ contains
 
       ! only do this on 1st time step, when have active atm model
       if (.not. lm4_model%control%restart .and. lm4_model%nml%cpl2atm .and. first_call) then
-         write( *,*) 'JPp using init value of lm4_model%atm_forc%p_surf'
+         call ESMF_LogWrite("Using init value of lm4_model%atm_forc%p_surf", ESMF_LOGMSG_INFO)
          lm4_model%atm_forc%p_surf = 97015
          first_call = .false.
       end if
-      ! TMP DEBUG do this all the time
-      lm4_model%atm_forc%p_surf = 97015
 
 
       if (ie_debug > 0) then ! Also want Structured Grid data
