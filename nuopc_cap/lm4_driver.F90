@@ -112,7 +112,6 @@ module lm4_driver
 
 
    !integer :: n_exch_tr !< number of tracers exchanged between models
-   integer :: ntile = 1 ! true for now, with no subtiling
 
    ! integers for diag manager fields (TODO: clean up)
    integer :: id_cellarea
@@ -248,7 +247,6 @@ contains
       !! TODO: cleanup unused code
 
       use mpp_domains_mod,    only: domain2d, mpp_get_compute_domain
-      use mpp_mod,            only: mpp_pe, mpp_root_pe
       use land_domain_mod,    only: domain_create
       use block_control_mod,  only: block_control_type, define_blocks_packed
       use land_tile_io_mod,   only : gather_tile_index
@@ -892,6 +890,22 @@ contains
 
             ex_flux_tr(k,tr)     =  ex_flux_tr(k,tr) + ex_dfdtr_atm(k,tr)*ex_f_tr_delt_n(k,tr)
             ex_dfdtr_surf(k,tr)  =  ex_dfdtr_surf(k,tr) + ex_dfdtr_atm(k,tr)*ex_e_tr_n(k,tr)
+
+            ! JP TMP DEBUG
+            if (mpp_pe() == mpp_root_pe() .and. lm4_model%nml%lm4_debug > 1) then
+               if (k == 1) then
+                  write(*,*) 'flux_down_from_atmos A: k=',k,' tr=',tr
+                  write(*,*) 'flux_down_from_atmos A: dtmass(k)      =',ex_dtmass(k)
+                  write(*,*) 'flux_down_from_atmos A: ex_dfdtr_atm(k,tr)=',ex_dfdtr_atm(k,tr)
+                  write(*,*) 'flux_down_from_atmos A: ex_delta_tr(k,tr) =',ex_delta_tr(k,tr)
+                  write(*,*) 'flux_down_from_atmos A: ex_gamma(k)       =',ex_gamma(k)
+                  write(*,*) 'flux_down_from_atmos A: ex_e_tr_n(k,tr)     =',ex_e_tr_n(k,tr)
+                  write(*,*) 'flux_down_from_atmos A: ex_f_tr_delt_n(k,tr) =',ex_f_tr_delt_n(k,tr)
+                  write(*,*) 'flux_down_from_atmos A: ex_flux_tr(k,tr)  =',ex_flux_tr(k,tr)
+                  write(*,*) 'flux_down_from_atmos A: ex_dfdtr_surf(k,tr) =',ex_dfdtr_surf(k,tr)
+               end if
+            endif
+
          enddo
       enddo
 
@@ -992,6 +1006,7 @@ contains
          ex_t_ca_new(kk)   = lm4_model%From_lnd%t_ca(l,k)
       end do
 
+      !! JP TD: escomp (t_surf_new, q_surf_new) ??
       do k = 1,ntiles_lnd
          if(ex_avail(k)) then
             ex_dt_t_ca(k)  = ex_t_ca_new(k)   - ex_t_ca(k)   ! changes in near-surface T
@@ -1006,6 +1021,11 @@ contains
                   ex_dt_t_surf(k) = 0.
                endif
          enddo
+      end if
+
+     if (mpp_pe() == mpp_root_pe() .and. lm4_model%nml%lm4_debug > 1) then
+         write(*,*) 'flux_up_to_atmos A: sum ex_dt_t_ca   = ', sum(ex_dt_t_ca)
+         write(*,*) 'flux_up_to_atmos A: sum ex_dt_t_surf = ', sum(ex_dt_t_surf)
       end if
 
       !-----------------------------------------------------------------------
@@ -1026,6 +1046,12 @@ contains
             enddo
       enddo
       
+
+     if (mpp_pe() == mpp_root_pe() .and. lm4_model%nml%lm4_debug > 1) then
+         write(*,*) 'flux_up_to_atmos B: sum ex_dt_tr_surf  = ', sum(ex_dt_tr_surf)
+         write(*,*) 'flux_up_to_atmos B: sum ex_tr_surf_new = ', sum(ex_tr_surf_new)
+      end if
+      
       ! TODO: review
       ! get all tracers available from land, and calculate changes in near-tracer field
       do tr = 1,ntcana
@@ -1043,14 +1069,17 @@ contains
          enddo
       enddo
 
-      ! TODO: Fix. Do I need atmos_land_boundary_type at all?
-      ! do tr=1,ntcana
-      !    ! get updated tracer tendency on the atmospheic grid
-      !    n=tr_table(tr)%atm
-      !    Land_Ice_Atmos_Boundary%dt_tr(:,:,n) = ex_delta_tr_n(:,tr)
-      !    ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dt_tr(:,:,n), 'ATM', ex_delta_tr_n(:,tr), xmap_sfc)
-      ! enddo
+     if (mpp_pe() == mpp_root_pe() .and. lm4_model%nml%lm4_debug > 1) then
+         write(*,*) 'flux_up_to_atmos C: sum ex_dt_tr_surf  = ', sum(ex_dt_tr_surf)
+         write(*,*) 'flux_up_to_atmos C: sum ex_delta_tr_n  = ', sum(ex_delta_tr_n )
+         write(*,*) 'flux_up_to_atmos C: sum ex_f_tr_delt_n  = ', sum(ex_f_tr_delt_n )
+         write(*,*) 'flux_up_to_atmos C: sum ex_e_tr_n  = ', sum(ex_e_tr_n )
+         write(*,*) 'flux_up_to_atmos C: sum ex_flux_tr  = ', sum(ex_flux_tr )
+         write(*,*) 'flux_up_to_atmos C: sum ex_dfdtr_surf  = ', sum(ex_dfdtr_surf )
+      end if      
 
+      ! adjust fluxes and atmospheric increments for
+      ! implicit dependence on surface temperature      
       do k = 1,ntiles_lnd
          ex_delta_t_n(k) = 0.0
          if(ex_avail(k)) then
@@ -1059,6 +1088,14 @@ contains
             ex_delta_t_n(k) = ex_f_t_delt_n(k)  + ex_dt_t_ca(k)*ex_e_t_n(k)
          endif
       enddo
+
+     if (mpp_pe() == mpp_root_pe() .and. lm4_model%nml%lm4_debug > 1) then
+         write(*,*) 'flux_up_to_atmos D: sum ex_flux_t      = ', sum(ex_flux_t)
+         write(*,*) 'flux_up_to_atmos D: sum ex_flux_lw     = ', sum(ex_flux_lw )
+         write(*,*) 'flux_up_to_atmos D: sum ex_delta_t_n   = ', sum(ex_delta_t_n )
+         write(*,*) 'flux_up_to_atmos D: sum ex_dt_t_ca     = ', sum(ex_dt_t_ca)
+         write(*,*) 'flux_up_to_atmos D: sum ex_e_t_n       = ', sum(ex_e_t_n )
+      end if   
 
       !-----------------------------------------------------------------------
       !---- get mean quantites on atmospheric grid ----
@@ -1072,6 +1109,17 @@ contains
       ! not originally to flux_up_to_atmos, but needed by ufs atm
       call aggregate_land_tiles(ex_tr_surf_new(:,isphum), lm4_model%atm_sfc%q_surf)
 
+     if (mpp_pe() == mpp_root_pe() .and. lm4_model%nml%lm4_debug > 1) then
+         write(*,*) 'flux_up_to_atmos E: sum lm4_model%atm_sfc%shflx    = ', sum(lm4_model%atm_sfc%shflx)
+         write(*,*) 'flux_up_to_atmos E: sum lm4_model%atm_sfc%lhflx    = ', sum(lm4_model%atm_sfc%lhflx )
+         write(*,*) 'flux_up_to_atmos E: sum  lm4_model%atm_sfc%q_surf  = ', sum( lm4_model%atm_sfc%q_surf )
+         write(*,*) 'flux_up_to_atmos E: sum  lm4_model%atm_sfc%t_surf  = ', sum( lm4_model%atm_sfc%t_surf )
+         write(*,*) 'flux_up_to_atmos E: sum  lm4_model%atm_forc%p_surf = ', sum( lm4_model%atm_forc%p_surf )
+
+      end if   
+
+      call aggregate_land_tiles(ex_t_ca_new, lm4_model%atm_sfc%t_surf)  !TMP move here
+
       if (lm4_model%nml%kinematic_flux) then
          ! convert units from W/m2
          rho = virtual_temp(lm4_model%atm_sfc%t_surf, lm4_model%atm_sfc%q_surf)
@@ -1080,7 +1128,22 @@ contains
          lm4_model%atm_sfc%lhflx = lm4_model%atm_sfc%lhflx/(rho*hlv)     ! LH/(rho*h_vap)
       endif
 
-      call aggregate_land_tiles(ex_t_ca_new, lm4_model%atm_sfc%t_surf)
+      ! call aggregate_land_tiles(ex_t_ca_new, lm4_model%atm_sfc%t_surf)
+
+
+      ! JP TMP DEBUG
+     if (mpp_pe() == mpp_root_pe() .and. lm4_model%nml%lm4_debug > 1) then
+         write(*,*) 'flux_up_to_atmos: sum ex_dt_t_ca = ', sum(ex_dt_t_ca)
+         write(*,*) 'flux_up_to_atmos: sum ex_dhdt_surf = ', sum(ex_dhdt_surf)
+         write(*,*) 'flux_up_to_atmos: sum ex_drdt_surf = ', sum(ex_drdt_surf)
+         write(*,*) 'flux_up_to_atmos: sum ex_dt_t_surf = ', sum(ex_dt_t_surf)
+         write(*,*) 'flux_up_to_atmos: sum lm4_model%atm_sfc%t_surf = ', sum(lm4_model%atm_sfc%t_surf)
+         write(*,*) 'flux_up_to_atmos: sum lm4_model%atm_sfc%q_surf = ', sum(lm4_model%atm_sfc%q_surf)
+         write(*,*) 'flux_up_to_atmos: sum rho = ', sum(rho)
+         write(*,*) 'flux_up_to_atmos: sum lm4_model%atm_sfc%shflx = ',  sum(lm4_model%atm_sfc%shflx)
+         write(*,*) 'flux_up_to_atmos: sum lm4_model%atm_sfc%lhflx = ',  sum(lm4_model%atm_sfc%lhflx)
+      end if
+      ! END JP TMP DEBUG
 
 
       ! !=======================================================================
