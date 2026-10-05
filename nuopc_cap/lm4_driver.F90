@@ -5,7 +5,7 @@ module lm4_driver
    use ESMF,                 only: ESMF_MethodRemove, ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS, &
                                    ESMF_FAILURE, ESMF_END_ABORT, ESMF_Finalize, ESMF_LOGMSG_ERROR, ESMF_LOGMSG_WARNING
    use mpp_domains_mod,      only: domain2d
-   use mpp_mod,              only: mpp_pe, mpp_root_pe
+   use mpp_mod,              only: mpp_pe, mpp_root_pe, input_nml_file
 
    use lm4_type_mod,         only: lm4_type
    use lm4_kind_mod,         only: r8 => shr_kind_r8, cl=>shr_kind_cl
@@ -160,7 +160,6 @@ contains
 
       use fms_mod,             only: check_nml_error
       use fms2_io_mod,         only: close_file
-      use mpp_mod,             only: input_nml_file
 
 
       type(lm4_type),          intent(inout) :: lm4_model ! land model's variable type
