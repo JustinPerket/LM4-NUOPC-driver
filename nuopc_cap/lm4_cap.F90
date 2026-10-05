@@ -331,11 +331,8 @@ contains
       lm4_model%Time_init, lm4_model%Time_land,                &
       lm4_model%Time_step_land, lm4_model%Time_step_slow     )
       
-      call init_driver(lm4_model)
-
-      call ESMF_LogWrite('======== COMPLETED land_model_init ==========', ESMF_LOGMSG_INFO)
-
       ! allocate storage for data to/from nuopc-cap atm
+      ! (before init_driver, which initializes atm_forc%gust)
       call alloc_atmforc(lm4_model%atm_forc)
       if (debug_cap > 0) then
          call alloc_atmforc2d(lm4_model%atm_forc2d) ! TMP DEBUG
@@ -343,6 +340,10 @@ contains
       if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
          call alloc_atmsfc(lm4_model%atm_sfc)
       end if
+
+      call init_driver(lm4_model)
+
+      call ESMF_LogWrite('======== COMPLETED land_model_init ==========', ESMF_LOGMSG_INFO)
 
       !----------------------------------------------------------------------------
       ! advertise fields
