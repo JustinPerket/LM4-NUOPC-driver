@@ -543,7 +543,7 @@ contains
       write(logmsg,*) currdate
       call ESMF_LogWrite(trim(subname)//'Land CurrTime = '//trim(logmsg), ESMF_LOGMSG_INFO)
 
-      if (debug_cap > 0) then
+      if (debug_cap > 1) then
          call atm_lnd_bnd_type_chksum('From_atm '//trim(logmsg), 1, lm4_model%From_atm)
          call land_data_type_chksum(  'From_lnd '//trim(logmsg), 1, lm4_model%From_lnd)
          call lm4_import_checksum('lm4_model%atm_forc '//trim(logmsg), 1, lm4_model)
@@ -589,7 +589,7 @@ contains
       lm4_model%Time_land = set_date (currdate(1), currdate(2), currdate(3),  &
          currdate(4), currdate(5), currdate(6))      
 
-      if (debug_cap > 0) then
+      if (debug_cap > 1) then
          call atm_lnd_bnd_type_chksum('From_atm '//trim(logmsg), 2, lm4_model%From_atm)
          call land_data_type_chksum(  'From_lnd '//trim(logmsg), 2, lm4_model%From_lnd)
          call lm4_import_checksum('lm4_model%atm_forc '//trim(logmsg), 2, lm4_model)
@@ -613,11 +613,12 @@ contains
 
       call ESMF_LogWrite(subname//' finished', ESMF_LOGMSG_INFO)
 
-      call atm_lnd_bnd_type_chksum('From_atm '//trim(logmsg), 3, lm4_model%From_atm)
-      call land_data_type_chksum(  'From_lnd '//trim(logmsg), 3, lm4_model%From_lnd)      
-      call lm4_import_checksum('lm4_model%atm_forc '//trim(logmsg), 3, lm4_model)
-      call lm4_export_checksum('lm4_model%atm_sfc '//trim(logmsg), 3, lm4_model)      
-
+      if (debug_cap > 1) then
+         call atm_lnd_bnd_type_chksum('From_atm '//trim(logmsg), 3, lm4_model%From_atm)
+         call land_data_type_chksum(  'From_lnd '//trim(logmsg), 3, lm4_model%From_lnd)      
+         call lm4_import_checksum('lm4_model%atm_forc '//trim(logmsg), 3, lm4_model)
+         call lm4_export_checksum('lm4_model%atm_sfc '//trim(logmsg), 3, lm4_model)      
+      end if
    end subroutine ModelAdvance
 
    !===============================================================================
