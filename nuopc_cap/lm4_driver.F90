@@ -306,8 +306,6 @@ contains
       ex_dfdtr_atm   = 0.0_r8
       ex_e_tr_n      = 0.0_r8
       ex_f_tr_delt_n = 0.0_r8
-      ex_avail       = 0.0_r8
-      ex_land        = 0.0_r8
 
       ! initialize ex_avail and ex_land
       ex_avail    = .TRUE.
