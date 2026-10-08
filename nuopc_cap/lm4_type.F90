@@ -61,7 +61,8 @@ module lm4_type_mod
          flux_sw_down_nir_dif   => NULL(), &
          flux_sw_vis            => NULL(), &
          flux_sw_vis_dir        => NULL(), &
-         flux_sw_vis_dif        => NULL()
+         flux_sw_vis_dif        => NULL(), &
+         vfrac                  => NULL()     ! green vegetation fraction from atm (for zvfun)
    end type atm_forc_type
 
    ! type for data sent from LM4 to atmosphere through NUOPC mediator
@@ -76,7 +77,13 @@ module lm4_type_mod
          albedo_vis_dir => NULL(), &
          albedo_nir_dir => NULL(), &
          albedo_vis_dif => NULL(), &
-         albedo_nir_dif => NULL()
+         albedo_nir_dif => NULL(), &
+
+         t_ref    => NULL(),  &   ! 2 m air temperature, degK
+         q_ref    => NULL(),  &   ! 2 m specific humidity, kg/kg
+         cmm      => NULL(),  &   ! momentum exchange coefficient times wind (cd_m*|v|), m/s
+         chh      => NULL(),  &   ! heat exchange coefficient times wind and density (rho*cd_t*|v|), kg/m2/s
+         zvfun    => NULL()       ! function of roughness and green vegetation fraction, as in FV3 sfc_diff
 
    end type atm_sfc_type
 
@@ -150,7 +157,11 @@ contains
       if (associated(bnd%albedo_nir_dir)) deallocate(bnd%albedo_nir_dir)
       if (associated(bnd%albedo_vis_dif)) deallocate(bnd%albedo_vis_dif)
       if (associated(bnd%albedo_nir_dif)) deallocate(bnd%albedo_nir_dif)
-      
+      if (associated(bnd%t_ref)) deallocate(bnd%t_ref)
+      if (associated(bnd%q_ref)) deallocate(bnd%q_ref)
+      if (associated(bnd%cmm))   deallocate(bnd%cmm)
+      if (associated(bnd%chh))   deallocate(bnd%chh)
+      if (associated(bnd%zvfun)) deallocate(bnd%zvfun)
 
    end subroutine dealloc_atmsfc
 
@@ -172,6 +183,11 @@ contains
       allocate( bnd%albedo_nir_dir(lnd%ls:lnd%le) )
       allocate( bnd%albedo_vis_dif(lnd%ls:lnd%le) )
       allocate( bnd%albedo_nir_dif(lnd%ls:lnd%le) )
+      allocate( bnd%t_ref(lnd%ls:lnd%le) )
+      allocate( bnd%q_ref(lnd%ls:lnd%le) )
+      allocate( bnd%cmm(lnd%ls:lnd%le) )
+      allocate( bnd%chh(lnd%ls:lnd%le) )
+      allocate( bnd%zvfun(lnd%ls:lnd%le) )
 
       bnd%shflx = 0.0
       bnd%lhflx = 0.0
@@ -182,6 +198,12 @@ contains
       bnd%albedo_nir_dir = 0.0
       bnd%albedo_vis_dif = 0.0
       bnd%albedo_nir_dif = 0.0
+
+      bnd%t_ref = 0.0
+      bnd%q_ref = 0.0
+      bnd%cmm   = 0.0
+      bnd%chh   = 0.0
+      bnd%zvfun = 0.0
 
    end subroutine alloc_atmsfc
 
@@ -213,6 +235,7 @@ contains
       if (associated(bnd%flux_sw_vis_dif)) deallocate(bnd%flux_sw_vis_dif)
       if (associated(bnd%lprec)) deallocate(bnd%lprec)
       if (associated(bnd%fprec)) deallocate(bnd%fprec)
+      if (associated(bnd%vfrac)) deallocate(bnd%vfrac)
 
    end subroutine dealloc_atmforc
 
@@ -248,6 +271,8 @@ contains
       allocate( bnd%flux_sw_vis_dif(lnd%ls:lnd%le) )
       allocate( bnd%lprec(lnd%ls:lnd%le) )
       allocate( bnd%fprec(lnd%ls:lnd%le) )
+      allocate( bnd%vfrac(lnd%ls:lnd%le) )
+      bnd%vfrac = 0.0
 
       ! gust is an output to lm4_surface_flux_1d, so it needs to be initialized 
       bnd%gust = 0.01  ! JP TEST VALUE

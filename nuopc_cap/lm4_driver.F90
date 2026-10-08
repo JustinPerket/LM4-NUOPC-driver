@@ -554,6 +554,8 @@ contains
    !  enddo ! end of block loop
 
       ! TODO: need "fill derivatives for all tracers" block?
+
+      if (lm4_model%nml%cpl2atm) call surface_layer_exports(lm4_model, ex_del_h, ex_del_q, ex_rough_mom)
       
       do k = 1, ntiles_lnd
          if(ex_avail(k)) ex_drag_q(k) = ex_wind(k)*ex_cd_q(k)
@@ -657,6 +659,50 @@ contains
       ! enddo
 
    end subroutine sfc_boundary_layer
+
+   !! ============================================================================
+   !! Surface-layer quantities exported to the UFS atmosphere, aggregated over land tiles:
+   !! 2 m temperature/humidity (as in GFDL flux_exchange t_ref/q_ref diagnostics),
+   !! exchange coefficients cmm/chh and zvfun (as in FV3 sfc_diff / NoahMP)
+   !! ============================================================================
+   subroutine surface_layer_exports(lm4_model, ex_del_h, ex_del_q, ex_rough_mom)
+
+      type(lm4_type),        intent(inout) :: lm4_model ! land model's variable type
+      real, dimension(:),    intent(in)    :: ex_del_h  ! mo_profile weight for heat at z_ref_heat
+      real, dimension(:),    intent(in)    :: ex_del_q  ! mo_profile weight for moisture at z_ref_heat
+      real, dimension(:),    intent(in)    :: ex_rough_mom ! land roughness length for momentum, m
+
+      real, parameter :: z0_low  = 0.1  ! roughness bounds of zvfun, as in FV3 sfc_diff (m)
+      real, parameter :: z0_high = 1.0
+
+      real, dimension(ntiles_lnd) :: ex_t_ref, ex_q_ref, ex_cmm, ex_cd_t_wind, ex_zvfun
+      real, dimension(size(lm4_model%atm_sfc%chh)) :: rho
+      real :: roughness_function
+
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      kk = 0
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))
+         kk = kk + 1
+         ex_t_ref(kk) = ex_t_ca(kk) + (lm4_model%atm_forc%t_bot(l) - ex_t_ca(kk)) * ex_del_h(kk)
+         ex_q_ref(kk) = ex_tr_surf(kk,isphum) + (lm4_model%atm_forc%q_bot(l) - ex_tr_surf(kk,isphum)) * ex_del_q(kk)
+         ex_cmm(kk)       = ex_cd_m(kk) * ex_wind(kk)
+         ex_cd_t_wind(kk) = ex_cd_t(kk) * ex_wind(kk)
+         roughness_function = min(max((ex_rough_mom(kk) - z0_low) / (z0_high - z0_low), 0.0), 1.0)
+         ex_zvfun(kk) = sqrt(roughness_function * max(lm4_model%atm_forc%vfrac(l), 0.1))
+      end do
+
+      call aggregate_land_tiles(ex_t_ref,     lm4_model%atm_sfc%t_ref)
+      call aggregate_land_tiles(ex_q_ref,     lm4_model%atm_sfc%q_ref)
+      call aggregate_land_tiles(ex_cmm,       lm4_model%atm_sfc%cmm)
+      call aggregate_land_tiles(ex_cd_t_wind, lm4_model%atm_sfc%chh)
+      call aggregate_land_tiles(ex_zvfun,     lm4_model%atm_sfc%zvfun)
+
+      ! chh is a mass flux coefficient: multiply by air density at the lowest atmospheric level
+      rho = virtual_temp(lm4_model%atm_forc%t_bot, lm4_model%atm_forc%q_bot)
+      rho = air_density(lm4_model%atm_forc%p_bot, rho)
+      lm4_model%atm_sfc%chh = rho * lm4_model%atm_sfc%chh
+
+   end subroutine surface_layer_exports
 
    !! ============================================================================
    !! Adapted from GFDL atm_land_ice_flux_exchange,

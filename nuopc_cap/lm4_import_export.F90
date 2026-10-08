@@ -523,6 +523,7 @@ contains
       call state_getimport_2d(importState, 'Faxa_swvdr', lm4data_1d=lm4_model%atm_forc%flux_sw_down_vis_dir, rc=rc) ! mean surface downward uv+vis direct flux
       call state_getimport_2d(importState, 'Faxa_swndf', lm4data_1d=lm4_model%atm_forc%flux_sw_down_nir_dif, rc=rc) ! mean surface downward nir diffuse flux
       call state_getimport_2d(importState, 'Faxa_swndr', lm4data_1d=lm4_model%atm_forc%flux_sw_down_nir_dir, rc=rc) ! mean surface downward nir direct flux
+      call state_getimport_2d(importState, 'Sa_vfrac',   lm4data_1d=lm4_model%atm_forc%vfrac, rc=rc)    ! green vegetation fraction (active UFS atm)
 
 
       ! only do this on 1st time step, when have active atm model
@@ -687,10 +688,15 @@ contains
 
 
 
+         call state_setexport_2d(exportState, 'Sl_tref',   lm4data_1d=lm4_model%atm_sfc%t_ref, rc=rc)
+         call state_setexport_2d(exportState, 'Sl_qref',   lm4data_1d=lm4_model%atm_sfc%q_ref, rc=rc)
+         call state_setexport_2d(exportState, 'Sl_cmm',    lm4data_1d=lm4_model%atm_sfc%cmm,   rc=rc)
+         call state_setexport_2d(exportState, 'Sl_chh',    lm4data_1d=lm4_model%atm_sfc%chh,   rc=rc)
+         call state_setexport_2d(exportState, 'Sl_zvfun',  lm4data_1d=lm4_model%atm_sfc%zvfun, rc=rc)
 
-         ! Note, comped to to NoahMP comp, still need to export Sl_cmm, Sl_chh, Sl_zvfun
-         ! Also other fields that seem to be needed by UFS atm for diagnostics:
-         ! Fall_evap, Sl_tref, Sl_qref, Fall_roff, Fall_soff, Fall_gflx
+         ! TODO: still exported as 0, need values from inside LM4:
+         ! Sl_sfrac (snow area), Fall_gflx (ground heat flux), Fall_roff/Fall_soff (surface/subsurface runoff),
+         ! and Fall_evap (potential evaporation, only used for FV3 diagnostics)
       end if
 
    end subroutine export_fields
