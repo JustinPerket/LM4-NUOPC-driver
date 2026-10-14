@@ -311,7 +311,10 @@ contains
 
       ! local variables
       integer                :: n
+      integer                :: field_rank
       type(ESMF_Field)       :: field
+      real(r8), pointer      :: fldptr1d(:)
+      real(r8), pointer      :: fldptr2d(:,:)
       character(len=80)      :: stdname
       character(len=*),parameter  :: subname='(lm4_import_export:fldlist_realize)'
       ! ----------------------------------------------
@@ -356,6 +359,19 @@ contains
                   rc = ESMF_FAILURE
                   return
                end if ! mesh or grid
+
+               ! 0 out uninitialized field data
+               call ESMF_FieldGet(field, rank=field_rank, rc=rc)
+               if (ChkErr(rc,__LINE__,u_FILE_u)) return
+               if (field_rank == 1) then
+                  call ESMF_FieldGet(field, farrayPtr=fldptr1d, rc=rc)
+                  if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                  fldptr1d(:) = 0.0_r8
+               else
+                  call ESMF_FieldGet(field, farrayPtr=fldptr2d, rc=rc)
+                  if (ChkErr(rc,__LINE__,u_FILE_u)) return
+                  fldptr2d(:,:) = 0.0_r8
+               end if
             endif
 
             ! NOW call NUOPC_Realize

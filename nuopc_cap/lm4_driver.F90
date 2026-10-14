@@ -886,7 +886,7 @@ contains
    !! ============================================================================
    subroutine  flux_up_to_atmos( lm4_model )
 
-      use constants_mod, only : hlv, cp_air
+      use constants_mod, only : cp_air
 
 
       type(lm4_type),        intent(inout)  :: lm4_model ! land model's variable type
@@ -896,8 +896,10 @@ contains
          ex_dt_t_surf,  &
          ex_delta_t_n,  &         
          ex_t_ca_new,   &    
-         ex_dt_t_ca,    &
-         rho               ! air density
+         ex_dt_t_ca
+
+      real, dimension(size(lm4_model%atm_sfc%shflx)) :: &
+         rho               ! air density at the lowest atmospheric level, per grid cell
 
       real, dimension(ntiles_lnd,ntcana) ::  &
          ex_tr_surf_new,    & ! updated tracer values at the surface
@@ -951,11 +953,13 @@ contains
             enddo
       enddo
       
-      ! TODO: review
-      ! get all tracers available from land, and calculate changes in near-tracer field
-      do tr = 1,ntcana
-         ex_tr_surf_new(:,tr) = lm4_model%From_lnd%tr(:,ntile_types,tr)
-      enddo
+      ! get updated canopy-air tracers from land, per tile (same tile order as ex_ arrays)
+      ce = first_elmt(land_tile_map, ls=lnd%ls)
+      kk = 0
+      do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))
+         kk = kk + 1
+         ex_tr_surf_new(kk,:) = lm4_model%From_lnd%tr(l,k,:)
+      end do
 
       ! update tracer tendencies in the atmosphere
       do tr = 1,ntcana
@@ -996,16 +1000,17 @@ contains
       call aggregate_land_tiles(ex_flux_tr(:,isphum), lm4_model%atm_sfc%lhflx)
       ! not originally to flux_up_to_atmos, but needed by ufs atm
       call aggregate_land_tiles(ex_tr_surf_new(:,isphum), lm4_model%atm_sfc%q_surf)
+      call aggregate_land_tiles(ex_t_ca_new, lm4_model%atm_sfc%t_surf)
 
       if (lm4_model%nml%kinematic_flux) then
-         ! convert units from W/m2
-         rho = virtual_temp(lm4_model%atm_sfc%t_surf, lm4_model%atm_sfc%q_surf)
-         rho = air_density(lm4_model%atm_forc%p_surf, rho)
+         ! convert units from W/m2, using air density at the lowest atmospheric level,
+         ! which is what the atmosphere uses to convert these fluxes back
+         rho = virtual_temp(lm4_model%atm_forc%t_bot, lm4_model%atm_forc%q_bot)
+         rho = air_density(lm4_model%atm_forc%p_bot, rho)
          lm4_model%atm_sfc%shflx = lm4_model%atm_sfc%shflx/(rho*cp_air)  ! SH/(rho*c_p)
-         lm4_model%atm_sfc%lhflx = lm4_model%atm_sfc%lhflx/(rho*hlv)     ! LH/(rho*h_vap)
+         ! lhflx holds the water vapor flux (kg/m2/s), not W/m2, so only divide by rho
+         lm4_model%atm_sfc%lhflx = lm4_model%atm_sfc%lhflx/rho           ! E/rho, kg/kg m/s
       endif
-
-      call aggregate_land_tiles(ex_t_ca_new, lm4_model%atm_sfc%t_surf)
 
 
       ! !=======================================================================
