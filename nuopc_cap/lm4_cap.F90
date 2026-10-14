@@ -29,7 +29,7 @@ module lm4_cap_mod
    use diag_manager_mod,     only: diag_manager_init, diag_manager_end, &
                                       diag_manager_set_time_end
 
-   use lm4_driver,           only: lm4_nml_read, init_driver, end_driver, debug_diag, write_int_restart
+   use lm4_driver,           only: lm4_nml_read, init_driver, end_driver, write_int_restart
 
    use land_model_mod,       only: land_model_init, land_model_end
    use land_data_mod,        only: land_data_type, atmos_land_boundary_type, lnd
@@ -410,11 +410,6 @@ contains
          staggerlocList=(/ESMF_STAGGERLOC_CENTER, ESMF_STAGGERLOC_CORNER/), &
          name='lnd_grid', rc=rc)
 
-      !! JP TMP DEBUG
-      if (debug_cap > 0) then
-         call wrt_fcst_grid(lndGrid, "diagnostic_lndGrid.nc", rc=rc)
-      endif
-
       ! set cpl_scalars from config. Default to null values
       lm4_model%cpl_scalar%flds_scalar_name = ''
       lm4_model%cpl_scalar%flds_scalar_num = 0
@@ -652,192 +647,6 @@ contains
 
    end subroutine ModelFinalize
 
-   !
-   !#######################################################################
-   !-- TMP DEBUG write grid to NetCDF file for diagnostics
-   !
-   subroutine wrt_fcst_grid(grid, fileName, relaxedflag, regridArea, rc)
-      type(ESMF_Grid), intent(in)                      :: grid
-      character(len=*), intent(in), optional           :: fileName
-      logical, intent(in), optional                    :: relaxedflag
-      logical, intent(in), optional                    :: regridArea
-      integer, intent(out)                             :: rc
-      !
-      !-----------------------------------------------------------------------
-      !***  local variables
-      !
-      logical                     :: ioCapable
-      logical                     :: doItFlag
-      character(len=64)           :: lfileName
-      character(len=64)           :: gridName
-      type(ESMF_Array)            :: array
-      type(ESMF_ArrayBundle)      :: arraybundle
-      logical                     :: isPresent
-      integer                     :: stat
-      logical                     :: hasCorners
-      logical                     :: lRegridArea
-      type(ESMF_Field)            :: areaField
-      type(ESMF_FieldStatus_Flag) :: areaFieldStatus
-
-      ioCapable = (ESMF_IO_PIO_PRESENT .and. &
-         (ESMF_IO_NETCDF_PRESENT .or. ESMF_IO_PNETCDF_PRESENT))
-      doItFlag = .true.
-      if (present(relaxedFlag)) then
-         doItFlag = .not.relaxedflag .or. (relaxedflag.and.ioCapable)
-      endif
-
-      if (doItFlag) then
-         ! Process optional arguments
-         if (present(fileName)) then
-            lfileName = trim(fileName)
-         else
-            call ESMF_GridGet(grid, name=gridName, rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            lfileName = trim(gridName)//".nc"
-         endif
-         if (present(regridArea)) then
-            lRegridArea = regridArea
-         else
-            lRegridArea = .FALSE.
-         endif
-
-         ! Create bundle for storing output
-         arraybundle = ESMF_ArrayBundleCreate(rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-            line=__LINE__, file=__FILE__)) return
-
-         ! -- Centers --
-         call ESMF_GridGetCoord(grid, staggerLoc=ESMF_STAGGERLOC_CENTER, &
-            isPresent=isPresent, rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-            line=__LINE__, file=__FILE__)) return
-         if (isPresent) then
-            call ESMF_GridGetCoord(grid, coordDim=1, &
-               staggerLoc=ESMF_STAGGERLOC_CENTER, array=array, rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            call ESMF_ArraySet(array, name="lon_center", rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            call ESMF_ArrayBundleAdd(arraybundle,(/array/), rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            call ESMF_GridGetCoord(grid, coordDim=2, &
-               staggerLoc=ESMF_STAGGERLOC_CENTER, array=array, rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            call ESMF_ArraySet(array, name="lat_center", rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            call ESMF_ArrayBundleAdd(arraybundle,(/array/), rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-         endif
-
-         ! -- Corners --
-         call ESMF_GridGetCoord(grid, staggerLoc=ESMF_STAGGERLOC_CORNER, &
-            isPresent=hasCorners, rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-            line=__LINE__, file=__FILE__)) return
-         if (hasCorners) then
-            call ESMF_GridGetCoord(grid, coordDim=1, &
-               staggerLoc=ESMF_STAGGERLOC_CORNER, array=array, rc=rc)
-            if (.not. ESMF_LogFoundError(rc, line=__LINE__, file=__FILE__)) then
-               call ESMF_ArraySet(array, name="lon_corner", rc=rc)
-               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                  line=__LINE__, file=__FILE__)) return
-               call ESMF_ArrayBundleAdd(arraybundle,(/array/), rc=rc)
-               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                  line=__LINE__, file=__FILE__)) return
-            endif
-            call ESMF_GridGetCoord(grid, coordDim=2, &
-               staggerLoc=ESMF_STAGGERLOC_CORNER, array=array, rc=rc)
-            if (.not. ESMF_LogFoundError(rc, line=__LINE__, file=__FILE__)) then
-               call ESMF_ArraySet(array, name="lat_corner", rc=rc)
-               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                  line=__LINE__, file=__FILE__)) return
-               call ESMF_ArrayBundleAdd(arraybundle,(/array/), rc=rc)
-               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                  line=__LINE__, file=__FILE__)) return
-            endif
-            if (lRegridArea) then
-               areaField = ESMF_FieldCreate(grid=grid, &
-                  typekind=ESMF_TYPEKIND_R8, rc=rc)
-               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                  line=__LINE__, file=__FILE__)) return
-               call ESMF_FieldRegridGetArea(areaField, rc=rc)
-               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                  line=__LINE__, file=__FILE__)) return
-               call ESMF_FieldGet(areaField, array=array, rc=rc)
-               if (.not. ESMF_LogFoundError(rc, line=__LINE__, file=__FILE__)) then
-                  call ESMF_ArraySet(array, name="regrid_area", rc=rc)
-                  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                     line=__LINE__, file=__FILE__)) return
-                  call ESMF_ArrayBundleAdd(arraybundle,(/array/), rc=rc)
-                  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                     line=__LINE__, file=__FILE__)) return
-               endif
-            endif
-         endif
-         ! -- Mask --
-         call ESMF_GridGetItem(grid, itemflag=ESMF_GRIDITEM_MASK, &
-            staggerLoc=ESMF_STAGGERLOC_CENTER, isPresent=isPresent, rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-            line=__LINE__, file=__FILE__)) return
-         if (isPresent) then
-            call ESMF_GridGetItem(grid, staggerLoc=ESMF_STAGGERLOC_CENTER, &
-               itemflag=ESMF_GRIDITEM_MASK, array=array, rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            call ESMF_ArraySet(array, name="mask", rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            call ESMF_ArrayBundleAdd(arraybundle,(/array/), rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-         endif
-
-         ! -- Area --
-         call ESMF_GridGetItem(grid, itemflag=ESMF_GRIDITEM_AREA, &
-            staggerLoc=ESMF_STAGGERLOC_CENTER, isPresent=isPresent, rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-            line=__LINE__, file=__FILE__)) return
-         if (isPresent) then
-            call ESMF_GridGetItem(grid, staggerLoc=ESMF_STAGGERLOC_CENTER, &
-               itemflag=ESMF_GRIDITEM_AREA, array=array, rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            call ESMF_ArraySet(array, name="area", rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            call ESMF_ArrayBundleAdd(arraybundle,(/array/), rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-         endif
-
-         ! Write array bundle to grid file
-         ! note: 6-tile not supported yet
-         ! call ESMF_ArrayBundleWrite(arraybundle, fileName=trim(lfileName), rc=rc)
-         ! if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-         !      line=__LINE__, file=__FILE__)) return
-
-         ! Clean-up
-         if (lRegridArea) then
-            call ESMF_FieldGet(areaField, status=areaFieldStatus, rc=rc)
-            if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-               line=__LINE__, file=__FILE__)) return
-            if (areaFieldStatus.eq.ESMF_FIELDSTATUS_COMPLETE) then
-               call ESMF_FieldDestroy(areaField, rc=rc)
-               if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-                  line=__LINE__, file=__FILE__)) return
-            endif
-         endif
-         call ESMF_ArrayBundleDestroy(arraybundle,rc=rc)
-         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-            line=__LINE__, file=__FILE__)) return
-      endif
-   end subroutine wrt_fcst_grid
    !
    !----------------------------------------------------------------------------
 end module
