@@ -23,11 +23,9 @@ module lm4_type_mod
       logical           :: implicit_atm ! coupling to atm either explicit or implicit
    end type lm4_nml_type
 
-   ! TODO: is this used at all?
    type :: lm4_control_type
       logical   :: first_time  ! flag for first time step
-      integer   :: mype
-      integer   :: nblks, blksz, isc, iec, jsc, jec
+      logical   :: restart     ! flag for restart run
    end type lm4_control_type
 
    type :: lm4_cpl_scalar_type

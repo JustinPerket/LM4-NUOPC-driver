@@ -463,6 +463,14 @@ contains
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
       endif
 
+      call NUOPC_CompAttributeGet(gcomp, name='start_type', value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
+      if (ChkErr(rc,__LINE__,u_FILE_u)) return
+      if (isPresent .and. isSet .and. trim(cvalue) == 'continue') then
+         lm4_model%control%restart = .true.
+      else
+         lm4_model%control%restart = .false.
+      endif
+
       ! ------------------------------------
       ! Realize the actively coupled fields
       ! ------------------------------------
