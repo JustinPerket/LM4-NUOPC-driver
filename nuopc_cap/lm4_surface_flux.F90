@@ -15,6 +15,7 @@ module lm4_surface_flux_mod
 ! ==== public interface ======================================================
    public  lm4_surface_flux_1d, lm4_surface_flux_init
    public  virtual_temp, air_density ! not in original coupler, but useful for other modules
+   public  alt_gustiness
 ! ==== end of public interface ===============================================
 
 

@@ -14,7 +14,7 @@ module lm4_driver
                                     first_elmt, loop_over_tiles, max_n_tiles, &
                                     tile_exists_func
    use land_tracers_mod,     only: isphum, ico2, ntcana
-   use lm4_surface_flux_mod, only: lm4_surface_flux_1d, virtual_temp, air_density
+   use lm4_surface_flux_mod, only: lm4_surface_flux_1d, virtual_temp, air_density, alt_gustiness
 
    use time_manager_mod,      only: time_type, date_to_string, increment_date, decrement_date
    use time_manager_mod,      only: operator(>=), operator(<), operator(==)
@@ -303,7 +303,14 @@ contains
          call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
          write(logmsg, '(A,F6.2)') 'gust_min = ', gust_min
          call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
-         call compute_gust(lm4_model)
+      endif
+      ! computed: u_star = b_star = 0 here, so gust starts at gust_min
+      call compute_gust(lm4_model)
+
+      ! FV3 GFS physics floors its surface wind at 1 m/s, like alt_gustiness with gust_const = 1
+      if (lm4_model%nml%cpl2atm .and. .not. alt_gustiness) then
+         call ESMF_LogWrite('cpl2atm without alt_gustiness: land and atm use different gustiness', &
+            ESMF_LOGMSG_WARNING, line=__LINE__, file=__FILE__)
       endif
 
       
@@ -592,72 +599,6 @@ contains
          end do
       end if
 
-      ! TODO: convert these from  xgrid and Land_Ice_Atmos_Boundary to atmos_land_boundary_type?
-      ! [6.2] put relevant quantities onto atmospheric boundary
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%t,         'ATM', ex_t_surf4  ,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%frac_open_sea,'ATM',ex_frac_open_sea, xmap_sfc)
-
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%rough_mom, 'ATM', ex_rough_mom,  xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%land_frac, 'ATM', ex_land_frac,  xmap_sfc, complete=.false.)
-
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%u_flux,    'ATM', ex_flux_u,     xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%v_flux,    'ATM', ex_flux_v,     xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dtaudu,    'ATM', ex_dtaudu_atm, xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%dtaudv,    'ATM', ex_dtaudv_atm, xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%u_star,    'ATM', ex_u_star    , xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%b_star,    'ATM', ex_b_star    , xmap_sfc, complete=.false.)
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%q_star,    'ATM', ex_q_star    , xmap_sfc, complete=.true.)
-
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%u_ref,     'ATM', ex_ref_u     , xmap_sfc, complete=.false.) !bqx
-      ! call get_from_xgrid (Land_Ice_Atmos_Boundary%v_ref,     'ATM', ex_ref_v     , xmap_sfc, complete=.true.) !bqx
-
-
-
-      ! ! TODO: Is this needed? do these have the right scope?
-      ! do l = lnd%ls,lnd%le
-      !    ex_albedo_fix(l) = (1.0-ex_albedo(l)) / (1.0-ex_albedo_fix(l))
-      !    ex_albedo_vis_dir_fix(l) = (1.0-ex_albedo_vis_dir(l)) / (1.0-ex_albedo_vis_dir_fix(l))
-      !    ex_albedo_nir_dir_fix(l) = (1.0-ex_albedo_nir_dir(l)) / (1.0-ex_albedo_nir_dir_fix(l))
-      !    ex_albedo_vis_dif_fix(l) = (1.0-ex_albedo_vis_dif(l)) / (1.0-ex_albedo_vis_dif_fix(l))
-      !    ex_albedo_nir_dif_fix(l) = (1.0-ex_albedo_nir_dif(l)) / (1.0-ex_albedo_nir_dif_fix(l))
-      ! enddo
-
-
-      !=======================================================================
-      ! [7] diagnostics section
-
-      ! call mo_profile ( zrefm, zrefh, lm4_model%atm_forc%z_bot,   ex_rough_mom(:), &
-      !    ex_rough_heat(:), ex_rough_moist(:),          &
-      !    ex_u_star(:), ex_b_star(:), ex_q_star(:),        &
-      !    ex_del_m(:), ex_del_h(:), ex_del_q(:), ex_avail(:)  )
-
-      ! !    ------- reference relative humidity -----------
-      ! !cjg     if ( id_rh_ref > 0 .or. id_rh_ref_land > 0 .or. &
-      ! !cjg          id_rh_ref_cmip > 0 .or. &
-      ! !cjg          id_q_ref > 0 .or. id_q_ref_land >0 ) then
-      ! do l = lnd%ls,lnd%le
-      !    ex_ref(l) = 1.0e-06
-      !    if (ex_avail(l)) &
-      !       ex_ref(l)   = ex_tr_surf(l,isphum) + (ex_tr_atm(l,isphum)-ex_tr_surf(l,isphum)) * ex_del_q(l)
-      ! enddo
-
-      ! do l = lnd%ls,lnd%le
-      !    ex_t_ref(l) = 200.
-      !    if(ex_avail(l)) &
-      !       ex_t_ref(l) = ex_t_ca(l) + (lm4_model%atm_forc%t_bot(l)-ex_t_ca(l)) * ex_del_h(l)
-      ! enddo
-      ! call compute_qs (ex_t_ref(:), ex_p_surf(:), ex_qs_ref(:), q = ex_ref(:))
-      ! call compute_qs (ex_t_ref(:), ex_p_surf(:), ex_qs_ref_cmip(:),  &
-      !    q = ex_ref(:), es_over_liq_and_ice = .true.)
-      ! do l = lnd%ls,lnd%le
-      !    if(ex_avail(l)) then
-      !       ! remove cap on relative humidity -- this mod requested by cjg, ljd
-      !       !RSH    ex_ref    = MIN(100.,100.*ex_ref/ex_qs_ref)
-      !       ex_ref2(l)   = 100.*ex_ref(l)/ex_qs_ref_cmip(l)
-      !       ex_ref(l)    = 100.*ex_ref(l)/ex_qs_ref(l)
-      !    endif
-      ! enddo
-
    end subroutine sfc_boundary_layer
 
    !! ============================================================================
@@ -789,8 +730,8 @@ contains
          ex_delta_t, ex_dflux_t, ex_e_q_n
 
       real, dimension(ntiles_lnd,ntcana) ::  &
-         ex_dflux_tr, & ! tracer flux change. TODO: NEED TO FETCH
-         ex_delta_tr ! tracer tendencies. TODO: NEED TO FETCH
+         ex_dflux_tr, & ! tracer flux change, zero for explicit coupling. TODO: needed for implicit coupling
+         ex_delta_tr ! tracer tendencies, zero for explicit coupling. TODO: needed for implicit coupling
 
       real :: cp_inv
 
@@ -814,7 +755,6 @@ contains
          ex_flux_sw_down_total_dir(kk) = lm4_model%atm_forc%flux_sw_down_vis_dir(l) + lm4_model%atm_forc%flux_sw_down_nir_dir(l)
          ex_flux_sw_down_total_dif(kk) = lm4_model%atm_forc%flux_sw_down_vis_dif(l) + lm4_model%atm_forc%flux_sw_down_nir_dif(l)
 
-         ! TODO: ex_flux_lwd
          ex_flux_lwd(kk) = lm4_model%atm_forc%flux_lw(l)
       end do
 

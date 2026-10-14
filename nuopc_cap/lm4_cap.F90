@@ -542,7 +542,6 @@ contains
       ! Run fast LM4 calls
       !-------------------------------------------------------------------------------
 
-      ! TODO, is sec being used anywhere?
       call get_time (lm4_model%Time_step_land, sec)        ! get seconds of timestep
       call sfc_boundary_layer(real(sec), lm4_model)
       call update_atmos_model_down(lm4_model)              ! for gust calculation with data atmosphere
