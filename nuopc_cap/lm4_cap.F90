@@ -4,14 +4,19 @@ module lm4_cap_mod
    ! LM4 Component
    !-----------------------------------------------------------------------------
 
-   use ESMF                  ! TODO: limit to only what is needed
+   use ESMF,                 only: ESMF_GridComp, ESMF_GridCompGet, ESMF_GridCompSetEntryPoint
+   use ESMF,                 only: ESMF_State, ESMF_Clock, ESMF_ClockGet, ESMF_VM, ESMF_VMGet, ESMF_VMGetCurrent
+   use ESMF,                 only: ESMF_Time, ESMF_TimeGet, ESMF_TimeInterval, ESMF_TimeIntervalGet
+   use ESMF,                 only: ESMF_Config, ESMF_ConfigCreate, ESMF_ConfigLoadFile, ESMF_ConfigGetAttribute
+   use ESMF,                 only: ESMF_Grid, ESMF_GridCreateMosaic, ESMF_Decomp_Flag, ESMF_DECOMP_SYMMEDGEMAX
+   use ESMF,                 only: ESMF_STAGGERLOC_CENTER, ESMF_STAGGERLOC_CORNER, ESMF_METHOD_INITIALIZE
+   use ESMF,                 only: ESMF_LogWrite, ESMF_LogFoundError, ESMF_LOGMSG_INFO, ESMF_LOGERR_PASSTHRU
+   use ESMF,                 only: ESMF_SUCCESS, operator(-)
    use NUOPC,                only: NUOPC_CompDerive, NUOPC_CompSetEntryPoint, NUOPC_CompSpecialize
-   use NUOPC,                only: NUOPC_CompFilterPhaseMap, NUOPC_CompAttributeGet, NUOPC_CompAttributeSet
+   use NUOPC,                only: NUOPC_CompFilterPhaseMap, NUOPC_CompAttributeGet
    use NUOPC_Model,          only: model_routine_SS           => SetServices
    use NUOPC_Model,          only: SetVM
    use NUOPC_Model,          only: model_label_Advance        => label_Advance
-   use NUOPC_Model,          only: model_label_DataInitialize => label_DataInitialize
-   use NUOPC_Model,          only: model_label_SetRunClock    => label_SetRunClock
    use NUOPC_Model,          only: model_label_Finalize       => label_Finalize
    use NUOPC_Model,          only: NUOPC_ModelGet
 
@@ -24,22 +29,18 @@ module lm4_cap_mod
                                    import_fields, correct_import_fields, export_fields
    use fms_mod,              only: fms_init, fms_end, uppercase
 
-   use mpp_mod,              only: mpp_error,FATAL, WARNING
+   use mpp_mod,              only: mpp_error, FATAL
    use diag_manager_mod,     only: diag_manager_init, diag_manager_end, &
                                       diag_manager_set_time_end
 
    use lm4_driver,           only: lm4_nml_read, init_driver, end_driver, write_int_restart
 
    use land_model_mod,       only: land_model_init, land_model_end
-   use land_data_mod,        only: land_data_type, atmos_land_boundary_type, lnd
    use constants_mod,        only: constants_init
-   !use monin_obukhov_mod,    only: monin_obukhov_init
    use lm4_surface_flux_mod, only: lm4_surface_flux_init
 
-   use time_manager_mod,     only: time_type, set_calendar_type, set_date,    &
-                                   set_time, get_time,                        &
-                                   THIRTY_DAY_MONTHS, JULIAN, GREGORIAN,      &
-                                   NOLEAP, NO_CALENDAR
+   use time_manager_mod,     only: set_calendar_type, set_date, set_time, get_time, &
+                                   THIRTY_DAY_MONTHS, JULIAN, GREGORIAN, NOLEAP, NO_CALENDAR
    use sat_vapor_pres_mod,   only: sat_vapor_pres_init
 
    implicit none
@@ -129,32 +130,27 @@ contains
       type(ESMF_GridComp)         :: gcomp
       type(ESMF_State)            :: importState, exportState
       type(ESMF_Clock)            :: clock  ! model clock
-      type(ESMF_Clock)            :: dclock ! driver clock
 
       integer, intent(out)        :: rc
 
 
       ! local variables
       type(ESMF_VM)               :: vm
-      integer                     :: lmpicom
 
       type(ESMF_Time)             :: CurrTime, StartTime, StopTime
       type(ESMF_TimeInterval)     :: RunDuration
       type(ESMF_Config)           :: cf
       integer                     :: Run_length
       integer,dimension(6)        :: date, date_end
-      !integer                     :: dt_atmos
 
       character(17)               :: calendar='                 '
       integer                     :: calendar_type = -99
-      integer                     :: ierr
-      integer                     :: n
       integer                     :: localpet
 
       character(len=CL)           :: logmsg
 
 
-      integer :: mype, ntasks, mpi_comm_land, mpi_comm_land2
+      integer :: mype, ntasks, mpi_comm_land
       character(len=*), parameter :: subname=trim(modName)//':(InitializeAdvertise) '
 
 
@@ -182,8 +178,6 @@ contains
       call sat_vapor_pres_init
 
       call lm4_surface_flux_init
-      ! originally in surface_flux_init
-      !call monin_obukhov_init
 
       !------------------------------------------------------------------------
       ! get config variables
@@ -279,8 +273,6 @@ contains
          date_end(4), date_end(5), date_end(6))
       write(logmsg,*) date_end
       call ESMF_LogWrite(trim(subname)//'Land StopTime = '//trim(logmsg), ESMF_LOGMSG_INFO)
-
-      ! call diag_manager_set_time_end(lm4_model%Time_end)
 
       CALL ESMF_TimeIntervalGet(RunDuration, S=Run_length, RC=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, line=__LINE__, file=__FILE__)) return
@@ -406,8 +398,6 @@ contains
          lm4_model%cpl_scalar%flds_scalar_name = trim(cvalue)
          call ESMF_LogWrite(trim(subname)//' flds_scalar_name = '//lm4_model%cpl_scalar%flds_scalar_name, ESMF_LOGMSG_INFO)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-         ! else
-         !    call shr_sys_abort(subname//'Need to set attribute ScalarFieldName')
       endif
 
       call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldCount", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
@@ -417,8 +407,6 @@ contains
          write(logmsg,*) lm4_model%cpl_scalar%flds_scalar_num
          call ESMF_LogWrite(trim(subname)//' flds_scalar_num = '//trim(logmsg), ESMF_LOGMSG_INFO)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
-         ! else
-         !    call shr_sys_abort(subname//'Need to set attribute ScalarFieldCount')
       endif
 
       call NUOPC_CompAttributeGet(gcomp, name="ScalarFieldIdxGridNX", value=cvalue, isPresent=isPresent, isSet=isSet, rc=rc)
@@ -486,9 +474,7 @@ contains
       ! Local variables
       type(ESMF_Clock)           :: clock
       type(ESMF_Clock)           :: dclock ! driver clock
-      type(ESMF_Time)            :: prevTime
       type(ESMF_Time)            :: currTime
-      type(ESMF_Alarm)           :: slowAlarm
       
       character(len=*),parameter :: subname=trim(modName)//':(ModelAdvance) '
       integer :: sec
@@ -584,11 +570,9 @@ contains
       type(ESMF_Clock)     :: dclock
       character(len=*),parameter  :: subname=trim(modName)//':(ModelFinalize) '
       type(ESMF_Time)            :: currTime
-      type(ESMF_Alarm)           :: slowAlarm
       
       character(len=CL)        :: logmsg
-      integer :: sec
-      integer,dimension(6)        :: currdate ! for FMS time      
+      integer,dimension(6)        :: currdate ! for FMS time
 
       rc = ESMF_SUCCESS
       call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)

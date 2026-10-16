@@ -44,14 +44,10 @@ module lm4_type_mod
          v_bot       => NULL(), &   ! merid. wind at the atm. bottom, m/s
          q_bot       => NULL(), &   ! specific humidity at the atm. bottom, kg/kg
          p_surf      => NULL(), &   ! surface pressure, N/m2
-         ! LM4 doesn't need slp
-         !slp       => NULL(), &   ! sea level pressure, N/m2 
          gust        => NULL(), &   ! gustiness, m/s
          coszen      => NULL(), &   ! cosine of zenith angle
          lprec       => NULL(), &   ! liquid precipitation, kg/m2/s
          fprec       => NULL(), &   ! frozen precipitation, kg/m2/s          
-         ! LM4 doesn't need net SW
-         !flux_sw   => NULL(), &   ! SW radiation flux (net), W/m2
          flux_lw     => NULL(), &   ! LW radiation flux (down), W/m2
          flux_sw_dir => NULL(), &
          flux_sw_dif => NULL(), &        
@@ -68,9 +64,8 @@ module lm4_type_mod
    ! type for data sent from LM4 to atmosphere through NUOPC mediator
    type, public :: atm_sfc_type
       real, pointer, dimension(:) ::  &
-         ! dt_t      => NULL(), &
-         shflx     => NULL(), &   ! sensible heat flux, W/m2   
-         lhflx     => NULL(), &   ! latent heat flux, W/m2
+         shflx     => NULL(), &   ! sensible heat flux, W/m2 (K m/s if kinematic_flux)
+         lhflx     => NULL(), &   ! water vapor flux, kg/m2/s (kg/kg m/s if kinematic_flux)
          q_surf   => NULL(),  &   ! specific humidity at the surface, kg/kg
          t_surf   => NULL(),  &   ! radiative surface temperature, degK
 
@@ -121,7 +116,6 @@ contains
       if (associated(bnd%q_surf)) deallocate(bnd%q_surf)
       if (associated(bnd%t_surf)) deallocate(bnd%t_surf)
 
-      !if (associated(bnd%dt_t)) deallocate(bnd%dt_t)
       if (associated(bnd%albedo_vis_dir)) deallocate(bnd%albedo_vis_dir)
       if (associated(bnd%albedo_nir_dir)) deallocate(bnd%albedo_nir_dir)
       if (associated(bnd%albedo_vis_dif)) deallocate(bnd%albedo_vis_dif)
@@ -147,7 +141,6 @@ contains
       allocate( bnd%lhflx(lnd%ls:lnd%le) )
       allocate( bnd%q_surf(lnd%ls:lnd%le) )
       allocate( bnd%t_surf(lnd%ls:lnd%le) )
-      !allocate( bnd%dt_t(lnd%ls:lnd%le) )
       allocate( bnd%albedo_vis_dir(lnd%ls:lnd%le) )
       allocate( bnd%albedo_nir_dir(lnd%ls:lnd%le) )
       allocate( bnd%albedo_vis_dif(lnd%ls:lnd%le) )
@@ -188,10 +181,8 @@ contains
       if (associated(bnd%v_bot)) deallocate(bnd%v_bot)
       if (associated(bnd%q_bot)) deallocate(bnd%q_bot)
       if (associated(bnd%p_surf)) deallocate(bnd%p_surf)
-      !if (associated(bnd%slp)) deallocate(bnd%slp)
       if (associated(bnd%gust)) deallocate(bnd%gust)
       if (associated(bnd%coszen)) deallocate(bnd%coszen)
-      !if (associated(bnd%flux_sw)) deallocate(bnd%flux_sw)
       if (associated(bnd%flux_lw)) deallocate(bnd%flux_lw)
       if (associated(bnd%flux_sw_dir)) deallocate(bnd%flux_sw_dir)
       if (associated(bnd%flux_sw_dif)) deallocate(bnd%flux_sw_dif)
@@ -224,10 +215,8 @@ contains
       allocate( bnd%v_bot(lnd%ls:lnd%le) )
       allocate( bnd%q_bot(lnd%ls:lnd%le) )
       allocate( bnd%p_surf(lnd%ls:lnd%le) )
-      !allocate( bnd%slp(lnd%ls:lnd%le) )
       allocate( bnd%gust(lnd%ls:lnd%le) )
       allocate( bnd%coszen(lnd%ls:lnd%le) )
-      !allocate( bnd%flux_sw(lnd%ls:lnd%le) )
       allocate( bnd%flux_lw(lnd%ls:lnd%le) )
       allocate( bnd%flux_sw_dir(lnd%ls:lnd%le) )
       allocate( bnd%flux_sw_dif(lnd%ls:lnd%le) )

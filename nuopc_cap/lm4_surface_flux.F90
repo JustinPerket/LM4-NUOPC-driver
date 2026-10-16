@@ -4,9 +4,9 @@ module lm4_surface_flux_mod
 
    use             fms_mod, only: mpp_pe, mpp_root_pe
    use             fms_mod, only: check_nml_error, stdlog
-   use   monin_obukhov_mod, only: mo_drag, mo_profile, monin_obukhov_init
-   use  sat_vapor_pres_mod, only: escomp, descomp
-   use       constants_mod, only: cp_air, hlv, stefan, rdgas, rvgas, grav, vonkarm
+   use   monin_obukhov_mod, only: mo_drag, monin_obukhov_init
+   use  sat_vapor_pres_mod, only: escomp
+   use       constants_mod, only: cp_air, hlv, stefan, rdgas, rvgas, grav
    use             mpp_mod, only: input_nml_file, FATAL, mpp_error
 
    implicit none
@@ -168,7 +168,7 @@ contains
          rho_drag, drag_t,    drag_m,   drag_q,    rho,      &
          q_atm,    q_surf0,  dw_atmdu,  dw_atmdv,  w_gust
 
-      integer :: i, nbad
+      integer :: i
 
 
       if (.not. module_is_initialized) &

@@ -2,18 +2,17 @@
 !! ============================================================================
 module lm4_driver
 
-   use ESMF,                 only: ESMF_MethodRemove, ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_SUCCESS, &
-                                   ESMF_FAILURE, ESMF_END_ABORT, ESMF_Finalize, ESMF_LOGMSG_ERROR, ESMF_LOGMSG_WARNING
+   use ESMF,                 only: ESMF_LogWrite, ESMF_LOGMSG_INFO, ESMF_END_ABORT, ESMF_Finalize, &
+                                   ESMF_LOGMSG_ERROR, ESMF_LOGMSG_WARNING
    use mpp_domains_mod,      only: domain2d
-   use mpp_mod,              only: mpp_pe, mpp_root_pe, input_nml_file
+   use mpp_mod,              only: input_nml_file
 
    use lm4_type_mod,         only: lm4_type
    use lm4_kind_mod,         only: r8 => shr_kind_r8, cl=>shr_kind_cl
-   use land_data_mod,        only: land_data_type, atmos_land_boundary_type, lnd
-   use land_tile_mod,        only : land_tile_map, land_tile_enum_type, land_tile_type, &
-                                    first_elmt, loop_over_tiles, max_n_tiles, &
-                                    tile_exists_func
-   use land_tracers_mod,     only: isphum, ico2, ntcana
+   use land_data_mod,        only: lnd
+   use land_tile_mod,        only : land_tile_map, land_tile_enum_type, land_tile_type, first_elmt, &
+                                    loop_over_tiles, max_n_tiles
+   use land_tracers_mod,     only: isphum, ntcana
    use lm4_surface_flux_mod, only: lm4_surface_flux_1d, virtual_temp, air_density, alt_gustiness
 
    use time_manager_mod,      only: time_type, date_to_string, increment_date, decrement_date
@@ -112,7 +111,6 @@ contains
    subroutine lm4_nml_read(lm4_model)
 
       use fms_mod,             only: check_nml_error
-      use fms2_io_mod,         only: close_file
 
 
       type(lm4_type),          intent(inout) :: lm4_model ! land model's variable type
@@ -134,7 +132,7 @@ contains
       logical           :: implicit_atm      = .false.  ! coupling to atm either explicit or implicit
 
       ! for namelist read
-      integer :: unit, io, ierr
+      integer :: io, ierr
       namelist /lm4_nml/ grid, npx, npy, layout, ntiles,      &
          blocksize, lm4_debug, dt_lnd_slow, restart_interval, &
          cpl2atm, kinematic_flux, implicit_atm
@@ -171,7 +169,6 @@ contains
    subroutine init_driver(lm4_model)
 
       use mpp_domains_mod,    only: domain2d, mpp_get_compute_domain
-      use mpp_mod,            only: mpp_pe, mpp_root_pe
       use land_domain_mod,    only: domain_create
       use land_tile_io_mod,   only : gather_tile_index
 
@@ -348,7 +345,6 @@ contains
    subroutine sfc_boundary_layer( dt,lm4_model )
 
 
-      use sat_vapor_pres_mod, only: compute_qs
       use monin_obukhov_mod,  only: mo_profile
       use land_tile_mod,      only: max_n_tiles   ! this should be 1 for now
 
@@ -356,20 +352,10 @@ contains
       type(lm4_type),        intent(inout)  :: lm4_model ! land model's variable type
 
       ! local variables --------------------------------------
-      !  !! blocking not used for now
-      !  integer :: nblocks = 1
-      !  integer :: my_nblocks = 1
-      !  integer, allocatable :: block_start(:), block_end(:)
 
       real    :: zrefm, zrefh
 
       real, dimension(ntiles_lnd) :: &
-         ex_albedo,             &
-         ex_albedo_vis_dir,     &
-         ex_albedo_nir_dir,     &
-         ex_albedo_vis_dif,     &
-         ex_albedo_nir_dif,     &
-      !ex_land_frac,          &
          ex_t_atm,              &
          ex_p_atm,              &
          ex_u_atm, ex_v_atm,    &
@@ -382,15 +368,10 @@ contains
          ex_rough_scale,        &
          ex_q_star,             &
          ex_cd_q,               &
-         ex_ref, ex_ref_u, ex_ref_v, ex_u10, &
-         ex_ref2,               &
-         ex_t_ref,              &
-         ex_qs_ref,             &
-         ex_qs_ref_cmip,        &
+         ex_ref_u, ex_ref_v, ex_u10, &
          ex_del_m,              &
          ex_del_h,              &
-         ex_del_q,              &
-         ex_frac_open_sea
+         ex_del_q
 
 
       !! -- These were originally allocatable:
@@ -399,18 +380,12 @@ contains
          ex_seawater       !< true if exchange grid cell is over seawater
 
       real, dimension(ntiles_lnd) :: &
-         ex_t_surf_miz, &
-         ex_q_surf  ,  &
-      !ex_slp      ,  &
-         ex_dqsatdt_surf,  &
-
-      ! MOD these were moved from local ! so they can be passed to flux down
          ex_flux_u,    &
          ex_flux_v,    &
          ex_dtaudu_atm,&
          ex_dtaudv_atm
 
-      integer :: tr, n, m ! tracer indices
+      integer :: tr ! tracer index
 
 
 
@@ -680,7 +655,7 @@ contains
    !! ============================================================================
    subroutine flux_down_from_atmos(dt, lm4_model)
 
-      use constants_mod,    only: cp_air, grav
+      use constants_mod,    only: cp_air
 
       real,                  intent(in)     :: dt        ! Time step
       type(lm4_type),        intent(inout)  :: lm4_model ! land model's variable type
@@ -689,14 +664,8 @@ contains
 
       real, dimension(ntiles_lnd) :: &
          ex_flux_sw, ex_flux_lwd, &
-         ex_flux_sw_dir,  &
-         ex_flux_sw_dif,  &
          ex_flux_sw_down_vis_dir, ex_flux_sw_down_total_dir,  &
          ex_flux_sw_down_vis_dif, ex_flux_sw_down_total_dif,  &
-         ex_flux_sw_vis, &
-         ex_flux_sw_vis_dir, &
-         ex_flux_sw_vis_dif, &
-      ! ex_tprec, & ! temperature of precipitation, currently equal to atm T
          ex_dtmass, ex_gamma, &
          ex_delta_t, ex_dflux_t, ex_e_q_n
 

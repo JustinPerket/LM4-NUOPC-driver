@@ -9,15 +9,14 @@ module lm4_import_export
    use ESMF,                     only: ESMF_KIND_R8, ESMF_SUCCESS, ESMF_END_ABORT, ESMF_Finalize
    use ESMF,                     only: ESMF_MAXSTR, ESMF_LOGMSG_INFO
    use ESMF,                     only: ESMF_LogWrite, ESMF_LOGMSG_ERROR, ESMF_LogFoundError, ESMF_FAILURE
-   use ESMF,                     only: ESMF_STATEITEM_NOTFOUND, ESMF_StateItem_Flag
+   use ESMF,                     only: ESMF_StateItem_Flag
    use ESMF,                     only: operator(/=), operator(==)
    use ESMF,                     only : ESMF_StateItem_Flag, ESMF_STATEITEM_FIELD
-   use NUOPC,                    only: NUOPC_CompAttributeGet, NUOPC_Advertise, NUOPC_IsConnected
+   use NUOPC,                    only: NUOPC_Advertise, NUOPC_IsConnected
    use NUOPC_Model,              only: NUOPC_ModelGet
-   use lm4_kind_mod,             only: r8 => shr_kind_r8, cx=>shr_kind_cx, cs=>shr_kind_cs
+   use lm4_kind_mod,             only: r8 => shr_kind_r8
    use lm4_type_mod,             only: lm4_type
    use land_data_mod,            only: lnd ! global data
-   use land_data_mod,            only: land_data_type, atmos_land_boundary_type
    use nuopc_lm4_methods,        only: chkerr
    use mpp_domains_mod,          only: mpp_pass_sg_to_ug, mpp_pass_ug_to_sg
 
@@ -148,8 +147,6 @@ contains
       call fldlist_add(fldsToLnd_num, fldsToLnd, 'Faxa_snowl')
       call fldlist_add(fldsToLnd_num, fldsToLnd, 'Sa_vfrac')
       call fldlist_add(fldsToLnd_num, fldsToLnd, 'Sa_zorl')
-      ! needed?
-      !call fldlist_add(fldsToLnd_num, fldsToLnd,'Faxa_garea')
 
       ! additional provided by CDEPS
       call fldlist_add(fldsToLnd_num, fldsToLnd, 'Faxa_swvdf') ! atmosphere export - mean surface downward uv+vis diffuse flux
@@ -644,9 +641,9 @@ contains
          call state_setexport_2d(exportState, 'Sl_chh',    lm4data_1d=lm4_model%atm_sfc%chh,   rc=rc)
          call state_setexport_2d(exportState, 'Sl_zvfun',  lm4data_1d=lm4_model%atm_sfc%zvfun, rc=rc)
 
-         ! TODO: still exported as 0, need values from inside LM4:
+         ! TODO: still exported as 0, need values from inside LM4. Though mostly seem diagnostic in UFS Atm
          ! Sl_sfrac (snow area), Fall_gflx (ground heat flux), Fall_roff/Fall_soff (surface/subsurface runoff),
-         ! and Fall_evap (potential evaporation, only used for FV3 diagnostics)
+         ! and Fall_evap (potential evaporation)
       end if
 
    end subroutine export_fields
@@ -681,7 +678,6 @@ contains
          call state_getfldptr(State, trim(fldname), fldptr1d=fldptr1d, rc=rc)
          if (ChkErr(rc,__LINE__,u_FILE_u)) return
          lm4data_1d(:) = fldptr1d(:)
-         !call check_for_nans(lm4data_1d, trim(fldname), 1)
       else
          call ESMF_LogWrite(subname//' '//trim(fldname)//' is not in the state!', ESMF_LOGMSG_ERROR)
          rc = ESMF_FAILURE
@@ -792,9 +788,9 @@ contains
       ! Get pointer to a state field
       ! ----------------------------------------------
 
-      use ESMF , only : ESMF_State, ESMF_Field, ESMF_Mesh, ESMF_FieldStatus_Flag
-      use ESMF , only : ESMF_StateGet, ESMF_MeshGet
-      use ESMF , only : ESMF_FIELDSTATUS_COMPLETE, ESMF_FAILURE
+      use ESMF , only : ESMF_State, ESMF_Field, ESMF_Mesh
+      use ESMF , only : ESMF_StateGet
+      use ESMF , only : ESMF_FAILURE
 
       ! input/output variables
       type(ESMF_State),             intent(in)    :: State
@@ -804,7 +800,6 @@ contains
       integer,                      intent(out)   :: rc
 
       ! local variables
-      type(ESMF_FieldStatus_Flag) :: status
       type(ESMF_Field)            :: lfield
       character(len=*), parameter :: subname='(lm4_import_export:state_getfldptr)'
       ! ----------------------------------------------
