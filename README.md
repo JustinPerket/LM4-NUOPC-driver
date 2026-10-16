@@ -18,7 +18,7 @@ Global cubed-sphere C96, C48, and C24 grids are supported. LM4 runs either with 
 Namelist Options
 --------------------------------------------------------
 
-Namelist options for tests are set in `tests/parm/input_datm_lm4*.nml.IN` (data atmosphere) and `tests/parm/input_atm_lm4*.nml.IN` (active atmosphere)
+Namelist options for tests are set in `tests/parm/input_datm_lm4.nml.IN` (data atmosphere) and `tests/parm/input_atm_lm4.nml.IN` (active atmosphere)
 
 It adds the namelist `lm4_nml`, along with several LM4 and a couple FMS coupler / flux exchange namelists
 
@@ -164,7 +164,7 @@ These tests use the following unique files:
     export DIAG_TABLE="diag_table_datm_lm4"                 # data atmosphere
     export DIAG_TABLE_ADDITIONAL=diag_additional_cpld_lm4.IN # active atmosphere
     export FIELD_TABLE_ADDITIONAL=field_table_lm4
-    export INPUT_NML="input_datm_lm4.nml.IN"                # or input_atm_lm4.nml.IN, *_lowres for C24/C48
+    export INPUT_NML="input_datm_lm4.nml.IN"                # or input_atm_lm4.nml.IN; C24/C48 tests call export_lm4_lowres
 
 TODO!!! REVIEW IF THESE ARE TEMP:
 
