@@ -166,12 +166,14 @@ These tests use the following unique files:
     export FIELD_TABLE_ADDITIONAL=field_table_lm4
     export INPUT_NML="input_datm_lm4.nml.IN"                # or input_atm_lm4.nml.IN, *_lowres for C24/C48
 
+TODO!!! REVIEW IF THESE ARE TEMP:
+
 C24/C48 grids and C96 hydrography are read from `LM4_GRID_INPUTDATA` and `LM4_HYDRO_PATH`, set in `rt.sh`.
 
 Imports and Exports
 --------------------------------------------------------
 
-The following are import and export variables. Imports are the same for both atmospheres.
+The following are import and export variables. Imports are similar for both atmospheres.
 
 | Import      | Description                                      | Variable Name       |
 |-------------|--------------------------------------------------|---------------------|
@@ -192,7 +194,7 @@ The following are import and export variables. Imports are the same for both atm
 |-------------|--------------------------------------------------|---------------------|      
 | Sl_lfrin    | Land fraction for mediator                       | lnd%sg_landfrac     |
 
-With an active atmosphere (`cpl2atm = .true.`), the active-atmosphere imports (`Sa_ta`, `Sa_qa`, `Sa_prsl`, `Sa_exner`, `Sa_ustar`, `Sa_tskn`, `Sa_zorl`, `Sa_vfrac`, `Faxa_swdn`, `Faxa_swnet`, `Faxa_rain[c,l]`, `Faxa_snow[c,l]`) are also used, and LM4 computes the land surface fluxes and exports:
+With an active atmosphere (`cpl2atm = .true.`), the active-atmosphere imports (`Sa_ta`, `Sa_qa`, `Sa_prsl`, `Sa_exner`, `Sa_ustar`, `Sa_tskn`, `Sa_zorl`, `Sa_vfrac`, `Faxa_swdn`, `Faxa_swnet`, `Faxa_rain`, `Faxa_snow`) are also used, and LM4 computes the land surface fluxes and exports:
 
 | Export      | Description                                      |
 |-------------|--------------------------------------------------|
@@ -210,11 +212,31 @@ With an active atmosphere (`cpl2atm = .true.`), the active-atmosphere imports (`
 | Sl_avsdr, Sl_anidr, Sl_avsdf, Sl_anidf | Visible/NIR direct/diffuse albedos |
 
 
-Surface boundary layer and connection to Land
+Surface boundary layer and coupling with the atmosphere
 --------------------------------------------------------
 
+Each fast (coupling) time step, `ModelAdvance` in `lm4_cap.F90` follows the GFDL FMS coupler sequence (adapted from `atm_land_ice_flux_exchange`, stripped down to land only on the LM4 unstructured grid):
+
 ```fortran
-      call sfc_boundary_layer(real(sec), lm4_model)
-      call update_atmos_model_down(lm4_model)              ! for gust calculation with data atmosphere
-      call flux_down_from_atmos(real(sec), lm4_model)      
+      call sfc_boundary_layer(real(sec), lm4_model)        ! surface fluxes and their derivatives
+      call update_atmos_model_down(lm4_model)              ! gustiness
+      call flux_down_from_atmos(real(sec), lm4_model)      ! fluxes and precip passed down to land
+      call update_land_model_fast(lm4_model%From_atm, lm4_model%From_lnd)
+      if (lm4_model%nml%cpl2atm) then                      ! active 2-way coupling with atm
+         call flux_up_to_atmos(lm4_model)                  ! fluxes and states passed up to atm
+      end if
+      ...
+      if (mod(time_sec+timestep_sec, dt_lnd_slow) == 0) call update_land_model_slow(...)
+      call export_fields(gcomp, lm4_model, rc)
 ```
+
+- `sfc_boundary_layer` computes surface-layer exchange fluxes, and their derivatives on each land tile. With `cpl2atm`, it among other things, aggregates the tile-fraction-weighted visible/NIR, direct/diffuse land albedos
+- `update_atmos_model_down` only computes gustiness. For an active atmosphere, `alt_gustiness = .true.` 
+- `flux_down_from_atmos` passes radiation, precipitation, and fluxes to land with explicit coupling. `implicit_atm = .true.` is not functional yet.
+- `flux_up_to_atmos` (only with `cpl2atm`) corrects the fluxes for the new land surface and canopy-air temperatures and tracers after `update_land_model_fast`, then aggregates over land tiles to the grid cell:
+  - sensible heat flux (`Fall_sen`) and water vapor flux (`Fall_lat`)
+  - canopy-air temperature (`Sl_t`) and specific humidity (`Sl_q`)
+  - with `kinematic_flux = .true.` (default), sensible heat is converted to `SH/(rho*cp)` and water vapor flux to `E/rho`, using air density at the lowest atmospheric level, matching what the UFS atmosphere expects
+- `export_fields` sends `Sl_lfrin` and, with `cpl2atm`, the fluxes, states, albedos, and surface-layer quantities above to CMEPS, which passes them to FV3. On the atmosphere side, `cpllnd = cpllnd2atm = .true.` in `gfs_physics_nml` replaces the land surface model over land with these imports.
+
+`Sl_sfrac`, `Fall_gflx`, `Fall_roff`, `Fall_soff`, and `Fall_evap` are advertised but currently exported as 0.
