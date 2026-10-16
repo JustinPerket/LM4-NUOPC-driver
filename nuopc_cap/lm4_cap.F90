@@ -288,17 +288,9 @@ contains
       call diag_manager_init (TIME_INIT=date)
       call diag_manager_set_time_end(lm4_model%Time_end)
 
-      ! ! This will match the active atmosphere component's time step, but not appropriate for data atmosphere
-      ! call ESMF_ConfigGetAttribute(config=CF, value=dt_atmos, label ='dt_atmos:',   rc=rc)
-      ! lm4_model%Time_step_land = set_time(dt_atmos,0)
-      ! ! instead, get from ESMF clock
+      ! land time step from the ESMF clock (not dt_atmos, which doesn't apply to a data atmosphere)
 
 
-      ! get model and driver clocks
-      ! call ESMF_GridCompGet(gcomp, clock=clock, rc=rc)
-      ! if (ChkErr(rc,__LINE__,u_FILE_u)) return      
-      ! call NUOPC_ModelGet(gcomp, driverClock=dclock, rc=rc)
-      ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
   
 
       call ESMF_ClockGet(clock,  timeStep=model_timestep, rc=rc)

@@ -561,7 +561,7 @@ contains
       allocate(tmp_ug_data(lnd%ls:lnd%le))
 
 
-      !! precip
+      !! precip (FMS coupler's scale_precip_2d precip scaling is not implemented)
       !! ---------------------------------------------------------------------
       ! rain
       if ( ( check_for_connected(fldsToLnd, fldsToLnd_num, 'Faxa_rainc') ) .and. &
@@ -590,7 +590,6 @@ contains
             ! have snow precip
             call state_getimport_2d(importState, 'Faxa_snow',  lm4data_1d=lm4_model%atm_forc%fprec, rc=rc)
       else
-         ! TODO: want to have FMS Coupler's precip scaling functionality here?
          call ESMF_LogWrite(trim(subname)//": Don't have any snow precip fields", &
             ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
          call ESMF_Finalize(endflag=ESMF_END_ABORT)
