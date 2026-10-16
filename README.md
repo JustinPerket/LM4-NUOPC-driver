@@ -13,12 +13,12 @@ but is managed by NOAA-GFDL at https://gitlab.gfdl.noaa.gov.
 Supported grids and resolutions
 --------------------------------------------------------
 
-Currently in development, only the global C96 grids are supported
+Global cubed-sphere C96, C48, and C24 grids are supported. LM4 runs either with the CDEPS data atmosphere (`-DAPP=LND-LM4`) or coupled to the active FV3 atmosphere (`-DAPP=ATML-LM4`), through the CMEPS mediator.
 
 Namelist Options
 --------------------------------------------------------
 
-namelist options for tests are set `tests/parm/input_datm_lm4.nml.IN`
+Namelist options for tests are set in `tests/parm/input_datm_lm4*.nml.IN` (data atmosphere) and `tests/parm/input_atm_lm4*.nml.IN` (active atmosphere)
 
 It adds the namelist `lm4_nml`, along with several LM4 and a couple FMS coupler / flux exchange namelists
 
@@ -35,11 +35,13 @@ Defaults for the `lm4_nml` if not specified in the run directory `input.nml` are
                                                ! The format is (yr,mo,day,hr,min,sec).  When restart_interval
                                                ! is all zero, no intermediate restart file will be written out
       cpl2atm     = .false.     ! coupling to active atmosphere
+      kinematic_flux = .true.   ! some fluxes to atm are expressed as kinematic
+      implicit_atm   = .false.  ! coupling to atm either explicit or implicit
 
 Additional, `flux_exchange_nml` and `atmos_prescr_nml` are existing namelists in `input.nml` at GFDL, and are needed by LM4 in UFS.
 They have been brought back in, only for the options used in LM4, and are read in by the land model.
 
-- `flux_exchange_nml` has the option `z_ref_heat`, the reference height for for temperature and relative humidity diagnostics (default 2 m )
+- `flux_exchange_nml` has the options `z_ref_heat`, the reference height for temperature and relative humidity diagnostics (default 2 m), and `z_ref_mom`, the reference height for momentum diagnostics (default 10 m)
 - `atmos_prescr_nml` has the options:
   - `gust_to_use` computed or prescribed gust for LM4 boundary layer ( default computed)
   - `gustiness`   wind gustiness (default 5.0 m/s)
@@ -115,6 +117,7 @@ LM4 uses FMS to write and read restarts.
   soil.res.tile{1..6}.nc 
   vegn1.res.tile{1..6}.nc
   vegn2.res.tile{1..6}.nc
+  river.res.tile{1..6}.nc   (only after a river slow time step, river_nml dt_slow)
   landuse.res	  
 ```
 
@@ -124,7 +127,7 @@ with the `lm4_nml` name list option:
 
  `restart_interval = Y,M,D,h,m,s` in `input.nml`
 
-The default is `restart_interval = 0,0,0,6,0,0`, ie, 6 hourly
+In the regression tests this is `LM4_RESTART_INTERVAL="0,0,0,6,0,0"`, ie, 6 hourly. Intermediate restarts are prefixed `YYYYMMDD.HHMMSS.`
 
 Note that LM4.0 will not restart accurately unless restarts are at time 00z
 
@@ -141,30 +144,34 @@ LM4 has fast and slow processes.
 Running with regression tests
 --------------------------------------------------------
 
-There are currently 2 Data-atmosphere tests:
+Data atmosphere (`LND-LM4`, C96/C48/C24):
 
-- `datm_cdeps_lm4_c96_gswp3`
-  - 48 hr test from 2000-01-01 00:00 with a cold start
-  - using CDEPS with GSWP3 forcing  
+- `datm_cdeps_lm4_gswp3{,_c48,_c24}`: 48 hr cold start from 2000-01-01 00:00 using CDEPS with GSWP3 forcing
+- `datm_cdeps_lm4_gswp3_rst{,_c48,_c24}`: restart test using restarts from the control
 
-- `datm_cdeps_lm4_c96_gswp3_rst` 
-   - a 24 hr restart test from 2000-01-02 00:00 
-   - warm start using restarts from `datm_cdeps_lm4_c96_gswp3`
+Active atmosphere (`ATML-LM4`, GFS v17 P8 physics, C96/C48):
 
-For both, the LM4 restart files listed above are used for comparisons 
+- `control_p8_atmlm4{,_c48}`: 48 hr cold start from 2021-03-22 00:00
+- `control_restart_p8_atmlm4{,_c48}`: restart test using restarts from the control
+
+LM4 restart files (and river restarts, when written) are used for comparisons.
 
 These tests use the following unique files:
 
     export UFS_CONFIGURE="ufs.configure.atm_lm4.IN"
-    export FV3_RUN="lm4_common.IN lm4_datm_cdeps_gswp.IN"
-    export DIAG_TABLE="diag_table_datm_lm4"
+    export FV3_RUN="lm4_common.IN lm4_datm_cdeps_gswp.IN"   # data atmosphere
+    export FV3_RUN="control_run.IN lm4_common.IN"           # active atmosphere
+    export DIAG_TABLE="diag_table_datm_lm4"                 # data atmosphere
+    export DIAG_TABLE_ADDITIONAL=diag_additional_cpld_lm4.IN # active atmosphere
     export FIELD_TABLE_ADDITIONAL=field_table_lm4
-    export INPUT_NML="input_datm_lm4.nml.IN"
+    export INPUT_NML="input_datm_lm4.nml.IN"                # or input_atm_lm4.nml.IN, *_lowres for C24/C48
+
+C24/C48 grids and C96 hydrography are read from `LM4_GRID_INPUTDATA` and `LM4_HYDRO_PATH`, set in `rt.sh`.
 
 Imports and Exports
 --------------------------------------------------------
 
-The following are current import and export variables used for data atmosphere
+The following are import and export variables. Imports are the same for both atmospheres.
 
 | Import      | Description                                      | Variable Name       |
 |-------------|--------------------------------------------------|---------------------|
@@ -184,6 +191,23 @@ The following are current import and export variables used for data atmosphere
 | Export      | Description                                      | Variable Name       |
 |-------------|--------------------------------------------------|---------------------|      
 | Sl_lfrin    | Land fraction for mediator                       | lnd%sg_landfrac     |
+
+With an active atmosphere (`cpl2atm = .true.`), the active-atmosphere imports (`Sa_ta`, `Sa_qa`, `Sa_prsl`, `Sa_exner`, `Sa_ustar`, `Sa_tskn`, `Sa_zorl`, `Sa_vfrac`, `Faxa_swdn`, `Faxa_swnet`, `Faxa_rain[c,l]`, `Faxa_snow[c,l]`) are also used, and LM4 computes the land surface fluxes and exports:
+
+| Export      | Description                                      |
+|-------------|--------------------------------------------------|
+| Sl_sfrac    | Snow fraction                                    |
+| Fall_lat    | Latent heat flux                                 |
+| Fall_sen    | Sensible heat flux                               |
+| Fall_evap   | Evaporation                                      |
+| Fall_gflx   | Ground heat flux                                 |
+| Fall_roff   | Subsurface runoff                                |
+| Fall_soff   | Surface runoff                                   |
+| Sl_t, Sl_q  | Surface temperature and specific humidity        |
+| Sl_tref, Sl_qref | Reference height temperature and humidity   |
+| Sl_cmm, Sl_chh   | Momentum and heat exchange coefficients     |
+| Sl_zvfun    | Vegetation function for FV3 surface layer        |
+| Sl_avsdr, Sl_anidr, Sl_avsdf, Sl_anidf | Visible/NIR direct/diffuse albedos |
 
 
 Surface boundary layer and connection to Land
