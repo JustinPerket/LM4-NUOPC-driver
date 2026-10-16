@@ -18,7 +18,6 @@ module lm4_cap_mod
    use lm4_kind_mod,         only: r8 => shr_kind_r8, cl=>shr_kind_cl
    use lm4_type_mod,         only: lm4_type, alloc_atmforc, dealloc_atmforc, &
                                    alloc_atmsfc, dealloc_atmsfc
-   use lm4_type_mod,         only: alloc_atmforc2d, dealloc_atmforc2d ! TMP DEBUG
 
    use nuopc_lm4_methods,    only: chkerr
    use lm4_import_export,    only: advertise_fields, realize_fields, &
@@ -70,9 +69,6 @@ module lm4_cap_mod
    type(ESMF_TimeInterval)  :: model_timestep
    integer                  :: timestep_sec
    
-   ! LM4 debug level
-   integer :: debug_cap 
-
    !===============================================================================
 contains
    !===============================================================================
@@ -203,7 +199,6 @@ contains
 
       ! Read lm4 namelist into lm4_model%nml
       call lm4_nml_read(lm4_model)
-      debug_cap = lm4_model%nml%lm4_debug
 
       if (mype == 0) then
          write(*,*) 'lm4_model%nml%lm4_debug: '        ,lm4_model%nml%lm4_debug
@@ -296,7 +291,6 @@ contains
       ! ! This will match the active atmosphere component's time step, but not appropriate for data atmosphere
       ! call ESMF_ConfigGetAttribute(config=CF, value=dt_atmos, label ='dt_atmos:',   rc=rc)
       ! lm4_model%Time_step_land = set_time(dt_atmos,0)
-      ! if(mype==0) write(*,*) 'Land dt_atmos =',dt_atmos
       ! ! instead, get from ESMF clock
 
 
@@ -333,9 +327,6 @@ contains
       ! allocate storage for data to/from nuopc-cap atm
       ! (before init_driver, which initializes atm_forc%gust)
       call alloc_atmforc(lm4_model%atm_forc)
-      if (debug_cap > 0) then
-         call alloc_atmforc2d(lm4_model%atm_forc2d) ! TMP DEBUG
-      endif
       if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
          call alloc_atmsfc(lm4_model%atm_sfc)
       end if
@@ -494,7 +485,6 @@ contains
       use lm4_driver,           only: sfc_boundary_layer, update_atmos_model_down, &
                                       flux_down_from_atmos, flux_up_to_atmos
       use land_model_mod,       only: update_land_model_fast, update_land_model_slow
-      use ESMF, only: ESMF_ClockPrint, ESMF_AlarmIsRinging ! TMP DEBUG
 
       ! Arguments
       type(ESMF_GridComp)  :: gcomp
@@ -512,11 +502,9 @@ contains
       integer :: sec
       integer,dimension(6)        :: currdate ! for FMS time
 
-      ! JP tmp debug
       integer                  :: time_sec   ! current time in seconds
       type(ESMF_TimeInterval)  :: model_time ! current time as ESMF_TimeInterval
       character(len=CL)        :: logmsg
-      ! END TMP DEBUG
 
       rc = ESMF_SUCCESS
       call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
@@ -545,7 +533,7 @@ contains
       call get_time (lm4_model%Time_step_land, sec)        ! get seconds of timestep
       call sfc_boundary_layer(real(sec), lm4_model)
       call update_atmos_model_down(lm4_model)              ! for gust calculation with data atmosphere
-      call flux_down_from_atmos(real(sec), lm4_model)      ! JP: needs review of implicit coupling
+      call flux_down_from_atmos(real(sec), lm4_model)      ! explicit coupling only, implicit_atm not functional
       call update_land_model_fast(lm4_model%From_atm,lm4_model%From_lnd)
 
       if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
@@ -571,9 +559,6 @@ contains
       lm4_model%Time_land = set_date (currdate(1), currdate(2), currdate(3),  &
          currdate(4), currdate(5), currdate(6))      
 
-      ! JP TMP DEBUG
-      ! write(logmsg,*) time_sec
-      ! call ESMF_LogWrite(trim(subname)//'LM4 driver currSimTime: '//trim(logmsg), ESMF_LOGMSG_INFO)
       
       !-------------------------------------------------------------------------------
       ! Run slow timescale LM4 calls
@@ -642,9 +627,6 @@ contains
 
       ! deallocate storage for data to/from nuopc-cap atm
       call dealloc_atmforc(lm4_model%atm_forc)
-      if (debug_cap > 0) then
-         call dealloc_atmforc2d(lm4_model%atm_forc2d) ! TMP DEBUG
-      endif
       
       if (lm4_model%nml%cpl2atm) then  ! if have active 2-way coupling with atm
          call dealloc_atmsfc(lm4_model%atm_sfc)

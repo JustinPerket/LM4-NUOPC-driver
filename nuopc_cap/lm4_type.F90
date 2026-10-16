@@ -87,36 +87,6 @@ module lm4_type_mod
 
    end type atm_sfc_type
 
-   ! TMP DEBUG
-   type, public :: atm_forc2d_type
-      real, pointer, dimension(:,:) ::  &
-         t_bot       => NULL(), &   ! temperature at the atm. bottom, degK
-         z_bot       => NULL(), &   ! altitude of the atm. bottom above sfc., m
-         p_bot       => NULL(), &   ! pressure at the atm. bottom, N/m2
-         u_bot       => NULL(), &   ! zonal wind at the atm. bottom, m/s
-         v_bot       => NULL(), &   ! merid. wind at the atm. bottom, m/s
-         q_bot       => NULL(), &   ! specific humidity at the atm. bottom, kg/kg
-         p_surf      => NULL(), &   ! surface pressure, N/m2
-      ! LM4 doesn't need slp
-      !slp       => NULL(), &   ! sea level pressure, N/m2
-         lprec       => NULL(), &   ! liquid precipitation, kg/m2/s
-         fprec       => NULL(), &   ! frozen precipitation, kg/m2/s          
-         gust        => NULL(), &   ! gustiness, m/s
-         coszen      => NULL(), &   ! cosine of zenith angle
-      ! LM4 doesn't need
-      !flux_sw   => NULL(), &   ! SW radiation flux (net), W/m2
-         flux_lw   => NULL(), &   ! LW radiation flux (down), W/m2
-         flux_sw_dir => NULL(), &
-         flux_sw_dif => NULL(), &
-         flux_sw_down_vis_dir   => NULL(), &
-         flux_sw_down_vis_dif   => NULL(), &
-         flux_sw_down_nir_dir   => NULL(), &
-         flux_sw_down_nir_dif   => NULL(), &
-         flux_sw_vis            => NULL(), &
-         flux_sw_vis_dir        => NULL(), &
-         flux_sw_vis_dif        => NULL()
-   end type atm_forc2d_type
-   ! END TMP DEBUG
 
 
 
@@ -126,7 +96,6 @@ module lm4_type_mod
       type(lm4_control_type)         :: control
       type(lm4_cpl_scalar_type)      :: cpl_scalar ! for scalars to mediator
       type(atm_forc_type)            :: atm_forc   ! data from atm 
-      type(atm_forc2d_type)          :: atm_forc2d ! TMP DEBUG
       type(atm_sfc_type)             :: atm_sfc    ! data to atm
       ! these are passed to the land model's routines:
       type(land_data_type)           :: From_lnd   ! data from land
@@ -279,72 +248,5 @@ contains
 
    end subroutine alloc_atmforc
 
-   ! TMP DEBUG
-   subroutine dealloc_atmforc2d(bnd)
-      use land_data_mod, only : lnd
-
-      type(atm_forc2d_type), intent(inout) :: bnd
-      ! for every variable in atm_forc_type, if associated, deallocate
-      if (associated(bnd%t_bot)) deallocate(bnd%t_bot)
-      if (associated(bnd%z_bot)) deallocate(bnd%z_bot)
-      if (associated(bnd%p_bot)) deallocate(bnd%p_bot)
-      if (associated(bnd%u_bot)) deallocate(bnd%u_bot)
-      if (associated(bnd%v_bot)) deallocate(bnd%v_bot)
-      if (associated(bnd%q_bot)) deallocate(bnd%q_bot)
-      if (associated(bnd%p_surf)) deallocate(bnd%p_surf)
-      !if (associated(bnd%slp)) deallocate(bnd%slp)
-      if (associated(bnd%gust)) deallocate(bnd%gust)
-      if (associated(bnd%coszen)) deallocate(bnd%coszen)
-      !if (associated(bnd%flux_sw)) deallocate(bnd%flux_sw)
-      if (associated(bnd%flux_lw)) deallocate(bnd%flux_lw)
-      if (associated(bnd%flux_sw_dir)) deallocate(bnd%flux_sw_dir)
-      if (associated(bnd%flux_sw_dif)) deallocate(bnd%flux_sw_dif)
-      if (associated(bnd%flux_sw_down_vis_dir)) deallocate(bnd%flux_sw_down_vis_dir)
-      if (associated(bnd%flux_sw_down_vis_dif)) deallocate(bnd%flux_sw_down_vis_dif)
-      if (associated(bnd%flux_sw_down_nir_dir)) deallocate(bnd%flux_sw_down_nir_dir)
-      if (associated(bnd%flux_sw_down_nir_dif)) deallocate(bnd%flux_sw_down_nir_dif)
-      if (associated(bnd%flux_sw_vis)) deallocate(bnd%flux_sw_vis)
-      if (associated(bnd%flux_sw_vis_dir)) deallocate(bnd%flux_sw_vis_dir)
-      if (associated(bnd%flux_sw_vis_dif)) deallocate(bnd%flux_sw_vis_dif)
-      if (associated(bnd%lprec)) deallocate(bnd%lprec)
-      if (associated(bnd%fprec)) deallocate(bnd%fprec)
-   end subroutine dealloc_atmforc2d
-
-   subroutine alloc_atmforc2d(bnd)
-      ! must be called after land_data_init
-      use land_data_mod, only : lnd
-
-      type(atm_forc2d_type), intent(inout) :: bnd
-
-      call dealloc_atmforc2d(bnd)
-
-      allocate( bnd%t_bot(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%z_bot(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%p_bot(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%u_bot(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%v_bot(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%q_bot(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%p_surf(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      !allocate( bnd%slp(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%gust(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%coszen(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      !allocate( bnd%flux_sw(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_lw(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_sw_dir(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_sw_dif(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_sw_down_vis_dir(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_sw_down_vis_dif(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_sw_down_nir_dir(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_sw_down_nir_dif(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_sw_vis(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_sw_vis_dir(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%flux_sw_vis_dif(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%lprec(lnd%is:lnd%ie,lnd%js:lnd%je) )
-      allocate( bnd%fprec(lnd%is:lnd%ie,lnd%js:lnd%je) )
-
-      bnd%gust = 0.0  ! not imported, debug copy only
-            
-   end subroutine alloc_atmforc2d
-	! TMP DEBUG
 
 end module lm4_type_mod

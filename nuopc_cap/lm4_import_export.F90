@@ -48,7 +48,6 @@ module lm4_import_export
    type (fld_list_type)   :: fldsToLnd(fldsMax)
    type (fld_list_type)   :: fldsFrLnd(fldsMax)
 
-   integer                :: ie_debug         ! internal debug level
 
    logical                :: send_to_atm = .true.
 
@@ -495,8 +494,6 @@ contains
       rc = ESMF_SUCCESS
       call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
-      ie_debug = lm4_model%nml%lm4_debug
-
       ! Get import state
       call NUOPC_ModelGet(gcomp, importState=importState, rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
@@ -533,25 +530,6 @@ contains
          first_call = .false.
       end if
 
-      if (ie_debug > 0) then ! Also want Structured Grid data
-         call state_getimport_2d(importState, 'Sa_z',       lm4data_2d=lm4_model%atm_forc2d%z_bot,   rc=rc)
-         call state_getimport_2d(importState, 'Sa_tbot',    lm4data_2d=lm4_model%atm_forc2d%t_bot,   rc=rc)
-         !call state_getimport_2d(importState, 'Sa_ta',      lm4data_2d=lm4_model%atm_forc2d%t_bot,    rc=rc)
-         ! call state_getimport_2d(importState, 'Sa_tskn'
-         call state_getimport_2d(importState, 'Sa_pbot',    lm4data_2d=lm4_model%atm_forc2d%p_bot,   rc=rc)
-         !call state_getimport_2d(importState, 'Sa_prsl',    lm4data_2d=lm4_model%atm_forc2d%p_bot, rc=rc)
-         call state_getimport_2d(importState, 'Sa_u',       lm4data_2d=lm4_model%atm_forc2d%u_bot,   rc=rc)
-         call state_getimport_2d(importState, 'Sa_v',       lm4data_2d=lm4_model%atm_forc2d%v_bot,   rc=rc)
-         call state_getimport_2d(importState, 'Sa_shum',    lm4data_2d=lm4_model%atm_forc2d%q_bot,   rc=rc)
-         !call state_getimport_2d(importState, 'Sa_qa',      lm4data_2d=lm4_model%atm_forc2d%q_bot,   rc=rc)
-         call state_getimport_2d(importState, 'Sa_pslv',    lm4data_2d=lm4_model%atm_forc2d%p_surf,  rc=rc)
-         call state_getimport_2d(importState, 'Faxa_lwdn',  lm4data_2d=lm4_model%atm_forc2d%flux_lw, rc=rc)
-         call state_getimport_2d(importState, 'Faxa_swvdf', lm4data_2d=lm4_model%atm_forc2d%flux_sw_down_vis_dif, rc=rc)
-         call state_getimport_2d(importState, 'Faxa_swvdr', lm4data_2d=lm4_model%atm_forc2d%flux_sw_down_vis_dir, rc=rc)
-         call state_getimport_2d(importState, 'Faxa_swndf', lm4data_2d=lm4_model%atm_forc2d%flux_sw_down_nir_dif, rc=rc)
-         call state_getimport_2d(importState, 'Faxa_swndr', lm4data_2d=lm4_model%atm_forc2d%flux_sw_down_nir_dir, rc=rc)
-      end if
-
       call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
    end subroutine import_fields
@@ -571,24 +549,16 @@ contains
       type(ESMF_State)                  :: importState
       character(len=*),       parameter :: subname=trim(modName)//':(correct_import_fields)'
       real(r8), dimension(:), pointer   :: tmp_ug_data ! temp unstructured grid data
-      real(r8), dimension(:,:), pointer   :: tmp_sg_data ! TMP DEBUG
-
-      integer :: i ! loop counter TMP DEBUG
       ! ----------------------------------------------
 
       rc = ESMF_SUCCESS
       call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
-
-      ie_debug = lm4_model%nml%lm4_debug
 
       ! Get import state
       call NUOPC_ModelGet(gcomp, importState=importState, rc=rc)
       if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
       allocate(tmp_ug_data(lnd%ls:lnd%le))
-      if (ie_debug > 0) then
-         allocate(tmp_sg_data(lnd%is:lnd%ie,lnd%js:lnd%je))
-      endif
 
 
       !! precip
@@ -600,17 +570,9 @@ contains
          call state_getimport_2d(importState, 'Faxa_rainc',  lm4data_1d=lm4_model%atm_forc%lprec, rc=rc)
          call state_getimport_2d(importState, 'Faxa_rainl',  lm4data_1d=tmp_ug_data, rc=rc)
          lm4_model%atm_forc%lprec = lm4_model%atm_forc%lprec + tmp_ug_data
-         if (ie_debug > 0) then
-            call state_getimport_2d(importState, 'Faxa_rainc', lm4data_2d=lm4_model%atm_forc2d%lprec, rc=rc)
-            call state_getimport_2d(importState, 'Faxa_rainl', lm4data_2d=tmp_sg_data, rc=rc)
-            lm4_model%atm_forc2d%lprec = lm4_model%atm_forc2d%lprec + tmp_sg_data
-         endif
       elseif (check_for_connected(fldsToLnd, fldsToLnd_num, 'Faxa_rain')) then
             ! have total liquid precip
             call state_getimport_2d(importState, 'Faxa_rain',  lm4data_1d=lm4_model%atm_forc%lprec, rc=rc)
-            if (ie_debug > 0) then
-               call state_getimport_2d(importState, 'Faxa_rain', lm4data_2d=lm4_model%atm_forc2d%lprec, rc=rc)
-            endif         
       else
          call ESMF_LogWrite(trim(subname)//": Don't have any liquid precip fields", &
             ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
@@ -624,17 +586,9 @@ contains
          call state_getimport_2d(importState, 'Faxa_snowc',  lm4data_1d=lm4_model%atm_forc%fprec, rc=rc)
          call state_getimport_2d(importState, 'Faxa_snowl',  lm4data_1d=tmp_ug_data, rc=rc)
          lm4_model%atm_forc%fprec = lm4_model%atm_forc%fprec + tmp_ug_data
-         if (ie_debug > 0) then
-            call state_getimport_2d(importState, 'Faxa_snowc', lm4data_2d=lm4_model%atm_forc2d%fprec, rc=rc)
-            call state_getimport_2d(importState, 'Faxa_snowl', lm4data_2d=tmp_sg_data, rc=rc)
-            lm4_model%atm_forc2d%fprec = lm4_model%atm_forc2d%fprec + tmp_sg_data
-         endif
       elseif (check_for_connected(fldsToLnd, fldsToLnd_num, 'Faxa_snow')) then
             ! have snow precip
             call state_getimport_2d(importState, 'Faxa_snow',  lm4data_1d=lm4_model%atm_forc%fprec, rc=rc)
-            if (ie_debug > 0) then
-               call state_getimport_2d(importState, 'Faxa_snow', lm4data_2d=lm4_model%atm_forc2d%fprec, rc=rc)
-            endif         
       else
          ! TODO: want to have FMS Coupler's precip scaling functionality here?
          call ESMF_LogWrite(trim(subname)//": Don't have any snow precip fields", &
@@ -644,9 +598,6 @@ contains
 
 
       deallocate(tmp_ug_data)
-      if (ie_debug > 0) then
-         deallocate(tmp_sg_data)
-      endif
 
    end subroutine correct_import_fields
 

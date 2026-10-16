@@ -924,7 +924,7 @@ contains
       !-----------------------------------------------------------------------
       !-----  adjust fluxes and atmospheric increments for
       !-----  implicit dependence on surface temperature -----
-      ! JP notes original code uses n_exch_tr instead of ntcana
+      ! original FMS code uses n_exch_tr instead of ntcana
       do tr = 1,ntcana
          ! set up updated surface tracer field so that flux to atmos for absent
          ! tracers is zero
@@ -1187,7 +1187,7 @@ contains
       kk = 0
       do while (loop_over_tiles(ce,tile,i=i,j=j,l=l,k=k))       
          kk = kk + 1
-         if (.not. land_tile_exists(tile)) then  ! TMP DEBUG MOD
+         if (.not. land_tile_exists(tile)) then
             write(logmsg,'(A,I4,A,I2)') 'Not land tile for (l,k) = (', l, ',', k, ')'
             call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_INFO)
             cycle
