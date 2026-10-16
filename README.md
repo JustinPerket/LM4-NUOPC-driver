@@ -36,7 +36,7 @@ Defaults for the `lm4_nml` if not specified in the run directory `input.nml` are
                                                ! is all zero, no intermediate restart file will be written out
       cpl2atm     = .false.     ! coupling to active atmosphere
       kinematic_flux = .true.   ! some fluxes to atm are expressed as kinematic
-      implicit_atm   = .false.  ! coupling to atm either explicit or implicit
+      implicit_atm   = .false.  ! implicit coupling to atm (not functional, .true. aborts)
 
 Additional, `flux_exchange_nml` and `atmos_prescr_nml` are existing namelists in `input.nml` at GFDL, and are needed by LM4 in UFS.
 They have been brought back in, only for the options used in LM4, and are read in by the land model.

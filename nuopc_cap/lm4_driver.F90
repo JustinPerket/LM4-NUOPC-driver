@@ -111,6 +111,7 @@ contains
    subroutine lm4_nml_read(lm4_model)
 
       use fms_mod,             only: check_nml_error
+      use mpp_mod,             only: mpp_pe, mpp_root_pe, stdlog
 
 
       type(lm4_type),          intent(inout) :: lm4_model ! land model's variable type
@@ -129,7 +130,7 @@ contains
       !! is all zero, no intermediate restart file will be written out
       logical           :: cpl2atm           = .false.  ! coupling to active atmosphere 
       logical           :: kinematic_flux    = .true.   ! some fluxes to atm are expressed as kinematic
-      logical           :: implicit_atm      = .false.  ! coupling to atm either explicit or implicit
+      logical           :: implicit_atm      = .false.  ! implicit coupling to atm (not functional, .true. aborts)
 
       ! for namelist read
       integer :: io, ierr
@@ -142,6 +143,13 @@ contains
       ! lm4_nml
       read(input_nml_file, nml=lm4_nml, iostat=io)
       ierr = check_nml_error(io, 'lm4_nml')
+      if (mpp_pe() == mpp_root_pe()) write(stdlog(), nml=lm4_nml)
+
+      if (implicit_atm) then
+         call ESMF_LogWrite('lm4_nml_read: implicit_atm = .true. is not functional', &
+            ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
+         call ESMF_Finalize(endflag=ESMF_END_ABORT)
+      endif
 
       read(input_nml_file, nml=atmos_prescr_nml, iostat=io)
       ierr = check_nml_error(io, 'atmos_prescr_nml')
@@ -979,13 +987,13 @@ contains
       ! check dimensions
       if (size(tile_data) /= ntiles_lnd) then
          write(logmsg,'(A,2I0)') 'Error in aggregate_land_tiles: size(tile_data) /= ntiles_lnd', size(tile_data), ntiles_lnd
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_ERROR)
-         stop
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
+         call ESMF_Finalize(endflag=ESMF_END_ABORT)
       endif
       if (size(grid_data) /= size(lnd%ug_landfrac)) then
          write(logmsg,'(A,2I0)') 'Error in aggregate_land_tiles: size(grid_data) /= size(lnd%ug_landfrac)', size(grid_data), size(lnd%ug_landfrac)
-         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_ERROR)
-         stop
+         call ESMF_LogWrite(trim(logmsg), ESMF_LOGMSG_ERROR, line=__LINE__, file=__FILE__)
+         call ESMF_Finalize(endflag=ESMF_END_ABORT)
       endif
 
       ce = first_elmt(land_tile_map, ls=lnd%ls)

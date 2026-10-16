@@ -150,7 +150,7 @@ contains
       character(len=CL)           :: logmsg
 
 
-      integer :: mype, ntasks, mpi_comm_land
+      integer :: mpi_comm_land
       character(len=*), parameter :: subname=trim(modName)//':(InitializeAdvertise) '
 
 
@@ -169,8 +169,7 @@ contains
       ! that Atm uses in it's fms_init. But it's ok, this fms_init will return without
       ! doing anything if already called on same proc layout
       call ESMF_VMGetCurrent(vm=VM,rc=RC)
-      call ESMF_VMGet(vm=VM, localPet=mype, mpiCommunicator=mpi_comm_land, &
-         petCount=ntasks, rc=rc)
+      call ESMF_VMGet(vm=VM, mpiCommunicator=mpi_comm_land, rc=rc)
 
       call fms_init(mpi_comm_land)
 
@@ -193,21 +192,6 @@ contains
 
       ! Read lm4 namelist into lm4_model%nml
       call lm4_nml_read(lm4_model)
-
-      if (mype == 0) then
-         write(*,*) 'lm4_model%nml%lm4_debug: '        ,lm4_model%nml%lm4_debug
-         write(*,*) 'lm4_model%nml%grid: '             ,lm4_model%nml%grid
-         write(*,*) 'lm4_model%nml%npx: '              ,lm4_model%nml%npx
-         write(*,*) 'lm4_model%nml%npy: '              ,lm4_model%nml%npy
-         write(*,*) 'lm4_model%nml%layout: '           ,lm4_model%nml%layout
-         write(*,*) 'lm4_model%nml%ntiles: '           ,lm4_model%nml%ntiles
-         write(*,*) 'lm4_model%nml%blocksize: '        ,lm4_model%nml%blocksize
-         write(*,*) 'lm4_model%nml%dt_lnd_slow '       ,lm4_model%nml%dt_lnd_slow
-         write(*,*) 'lm4_model%nml%restart_interval: ' ,lm4_model%nml%restart_interval
-         write(*,*) 'lm4_model%nml%cpl2atm: '          ,lm4_model%nml%cpl2atm
-         write(*,*) 'lm4_model%nml%kinematic_flux: '   ,lm4_model%nml%kinematic_flux
-         write(*,*) 'lm4_model%nml%implicit_atm: '     ,lm4_model%nml%implicit_atm
-      endif
 
 
 
